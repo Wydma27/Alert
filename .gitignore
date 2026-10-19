@@ -1,0 +1,16 @@
+# Zależności i wyniki budowania
+node_modules/
+dist/
+coverage/
+.vite/
+*.log
+
+# Sekrety i dane – NIGDY do repozytorium
+.env
+.env.*
+!.env.example
+.data/
+
+# Pliki tymczasowe
+*.tmp.ts
+*.zip

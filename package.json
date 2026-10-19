@@ -1,0 +1,43 @@
+{
+  "name": "alert-szkolny",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run db:generate -w apps/api",
+    "setup": "node scripts/generate-env.mjs",
+    "db:local": "node scripts/local-db.mjs",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:deploy": "npm run db:deploy -w apps/api",
+    "db:migrate": "npm run db:migrate -w apps/api",
+    "db:seed": "npm run db:seed -w apps/api",
+    "db:reset": "npm run db:reset -w apps/api",
+    "dev": "concurrently -n api,web -c red,blue \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "dev:all": "concurrently -n db,api,web -c gray,red,blue \"npm run db:local\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "build": "npm run build -w apps/web && npm run build -w apps/api",
+    "start": "npm run start -w apps/api",
+    "test": "npm test -w apps/api -w packages/shared",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "audit:verify": "npm run audit:verify -w apps/api",
+    "admin:create": "npm run admin:create -w apps/api --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "embedded-postgres": "^16.14.0-beta.17",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "prisma@6.19.3": true,
+    "@embedded-postgres/windows-x64@16.14.0-beta.17": true
+  }
+}

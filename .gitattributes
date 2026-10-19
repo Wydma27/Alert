@@ -1,0 +1,4 @@
+# Jednolite końce linii (LF) – repozytorium działa tak samo na Windows i serwerze Linux
+* text=auto eol=lf
+*.png binary
+*.xlsx binary

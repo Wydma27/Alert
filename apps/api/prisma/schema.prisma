@@ -1,0 +1,449 @@
+// Model danych – etap 1 (szkoła, użytkownicy, klasy, uczniowie, opiekunowie, punkty zbiórki, audit log).
+// Tabele alertów i wysyłki SMS dochodzą w etapie 3.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DYREKCJA
+  NAUCZYCIEL
+}
+
+/// Jedna szkoła na instalację – zawsze wiersz id = 1 (CHECK w migracji).
+model School {
+  id           Int      @id @default(1)
+  name         String
+  /// Krótka nazwa używana w SMS (np. "SP12 Lublin") – oszczędza znaki.
+  smsName      String   @map("sms_name")
+  address      String
+  contactPhone String   @map("contact_phone")
+  /// Nazwa nadawcy SMS zarejestrowana w bramce (max 11 znaków).
+  senderName   String   @map("sender_name")
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("school")
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  fullName       String    @map("full_name")
+  role           Role
+  passwordHash   String    @map("password_hash")
+  /// Sekret TOTP zaszyfrowany AES-256-GCM.
+  totpSecretEnc  String?   @map("totp_secret_enc")
+  /// Sekret w trakcie konfiguracji (zatwierdzany kodem z aplikacji).
+  totpPendingEnc String?   @map("totp_pending_enc")
+  /// Ostatni użyty krok czasowy TOTP – blokuje ponowne użycie tego samego kodu.
+  totpLastStep   Int?      @map("totp_last_step")
+  /// PIN potwierdzający uruchomienie alertu (argon2id).
+  launchPinHash  String?   @map("launch_pin_hash")
+  /// Nieudane próby PIN-u alarmowego (blokada chroni przed zgadywaniem).
+  pinFailed      Int       @default(0) @map("pin_failed")
+  pinLockedUntil DateTime? @map("pin_locked_until") @db.Timestamptz(3)
+  /// Telefon pracownika (np. link do listy obecności w etapie 5), zaszyfrowany.
+  phoneEnc       String?   @map("phone_enc")
+  isActive       Boolean   @default(true) @map("is_active")
+  failedLogins   Int       @default(0) @map("failed_logins")
+  lockedUntil    DateTime? @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions      Session[]
+  recoveryCodes RecoveryCode[]
+
+  @@map("users")
+}
+
+model Session {
+  /// SHA-256 tokenu z ciasteczka – sam token nie trafia do bazy.
+  id         String   @id
+  userId     Int      @map("user_id")
+  mfaOk      Boolean  @default(false) @map("mfa_ok")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  ip         String?
+  userAgent  String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model RecoveryCode {
+  id       Int       @id @default(autoincrement())
+  userId   Int       @map("user_id")
+  codeHash String    @map("code_hash")
+  usedAt   DateTime? @map("used_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_recovery_codes")
+}
+
+model AssemblyPoint {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String
+  mapUrl    String?  @map("map_url")
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  classes SchoolClass[]
+
+  @@map("assembly_points")
+}
+
+model SchoolClass {
+  id                     Int      @id @default(autoincrement())
+  /// Nazwa znormalizowana, np. "3B".
+  name                   String   @unique
+  defaultAssemblyPointId Int?     @map("default_assembly_point_id")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  defaultAssemblyPoint AssemblyPoint? @relation(fields: [defaultAssemblyPointId], references: [id], onDelete: SetNull)
+  students             Student[]
+
+  @@map("classes")
+}
+
+model Student {
+  id         Int      @id @default(autoincrement())
+  classId    Int      @map("class_id")
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  /// Identyfikator z dziennika elektronicznego (bez PESEL – minimalizacja danych).
+  externalId String?  @unique @map("external_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  schoolClass SchoolClass       @relation(fields: [classId], references: [id], onDelete: Restrict)
+  guardians   StudentGuardian[]
+
+  @@index([classId])
+  @@index([lastName, firstName])
+  @@map("students")
+}
+
+model Guardian {
+  id          Int      @id @default(autoincrement())
+  displayName String?  @map("display_name")
+  /// Numer E.164 zaszyfrowany AES-256-GCM.
+  phoneEnc    String   @map("phone_enc")
+  /// HMAC-SHA256 numeru – deduplikacja i wyszukiwanie bez odszyfrowania.
+  phoneHmac   String   @unique @map("phone_hmac")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  students StudentGuardian[]
+
+  @@map("guardians")
+}
+
+model StudentGuardian {
+  studentId      Int     @map("student_id")
+  guardianId     Int     @map("guardian_id")
+  /// 1 = pierwszy kontakt.
+  priority       Int     @default(1)
+  receivesAlerts Boolean @default(true) @map("receives_alerts")
+  /// Upoważniony do odbioru dziecka z punktu zbiórki.
+  canPickUp      Boolean @default(true) @map("can_pick_up")
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, guardianId])
+  @@index([guardianId])
+  @@map("student_guardians")
+}
+
+/// Numery, na które wolno wysyłać SMS-y testowe i w trybie ćwiczeń.
+model TestNumber {
+  id        Int      @id @default(autoincrement())
+  label     String
+  phoneEnc  String   @map("phone_enc")
+  phoneHmac String   @unique @map("phone_hmac")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("test_numbers")
+}
+
+model ImportJob {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  filename  String
+  status    String
+  /// Tylko liczby i komunikaty walidacji – sam plik nie jest przechowywany.
+  summary   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("import_jobs")
+}
+
+/// Dziennik zdarzeń: tylko do zapisu (trigger blokuje UPDATE/DELETE),
+/// każdy wpis zawiera hash poprzedniego (łańcuch wykrywa modyfikacje).
+/// Celowo bez kluczy obcych – wpisy przeżywają usunięcie danych, których dotyczą.
+model AuditLog {
+  id       BigInt   @id @default(autoincrement())
+  at       DateTime @default(now()) @db.Timestamptz(6)
+  userId   Int?     @map("user_id")
+  ip       String?
+  action   String
+  entity   String?
+  entityId String?  @map("entity_id")
+  details  Json     @default("{}")
+  prevHash String?  @map("prev_hash")
+  /// Ustawiany przez trigger w bazie.
+  hash     String   @default("")
+
+  @@index([at])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_log")
+}
+
+// =====================================================================
+// Etapy 2–5: szablony, alerty, wysyłka, doręczenia, obecność
+// =====================================================================
+
+enum MessageKind {
+  START
+  UPDATE
+  CANCEL
+  CONFIRM
+  PICKUP
+}
+
+enum AlertMode {
+  REAL
+  DRILL
+}
+
+enum AlertStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum AlertScope {
+  SCHOOL
+  CLASSES
+  STUDENTS
+}
+
+enum Attendance {
+  UNKNOWN
+  PRESENT
+  ABSENT_TODAY
+  MISSING
+  PICKED_UP
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  UNDELIVERED
+  FAILED
+}
+
+enum CallResult {
+  REACHED
+  NO_ANSWER
+  WRONG_NUMBER
+}
+
+/// Typy zdarzeń do wyboru przy alarmie. smsLabel trafia do treści SMS.
+model EventType {
+  id        Int     @id @default(autoincrement())
+  label     String
+  smsLabel  String  @map("sms_label")
+  sortOrder Int     @default(0) @map("sort_order")
+  active    Boolean @default(true)
+
+  @@map("event_types")
+}
+
+/// Jeden aktywny szablon na rodzaj komunikatu; historia zmian w dzienniku zdarzeń.
+model SmsTemplate {
+  kind            MessageKind @id
+  body            String
+  stripDiacritics Boolean     @default(true) @map("strip_diacritics")
+  version         Int         @default(1)
+  updatedById     Int?        @map("updated_by_id")
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("sms_templates")
+}
+
+model Alert {
+  id                Int         @id @default(autoincrement())
+  mode              AlertMode
+  status            AlertStatus @default(ACTIVE)
+  eventTypeId       Int?        @map("event_type_id")
+  /// Opis zdarzenia w interfejsie i w SMS (kopia z chwili startu).
+  eventLabel        String      @map("event_label")
+  eventSmsLabel     String      @map("event_sms_label")
+  pickupInstruction String      @map("pickup_instruction")
+  scope             AlertScope
+  /// Czy wysyłać SMS o obecności dziecka w punkcie zbiórki po odhaczeniu.
+  sendConfirmations Boolean     @default(true) @map("send_confirmations")
+  idempotencyKey    String      @unique @map("idempotency_key")
+  startedById       Int         @map("started_by_id")
+  startedAt         DateTime    @default(now()) @map("started_at") @db.Timestamptz(3)
+  closedById        Int?        @map("closed_by_id")
+  closedAt          DateTime?   @map("closed_at") @db.Timestamptz(3)
+  /// Ustawiane, gdy dane osobowe alertu zostały zanonimizowane (retencja).
+  purgedAt          DateTime?   @map("purged_at") @db.Timestamptz(3)
+
+  classes    AlertClass[]
+  students   AlertStudent[]
+  messages   AlertMessage[]
+  deliveries SmsDelivery[]
+  calls      CallAttempt[]
+
+  @@index([status])
+  @@map("alerts")
+}
+
+/// Klasa objęta alertem i jej bieżący punkt zbiórki – kopia nazwy i adresu z chwili alertu.
+model AlertClass {
+  id              Int    @id @default(autoincrement())
+  alertId         Int    @map("alert_id")
+  classId         Int?   @map("class_id")
+  className       String @map("class_name")
+  assemblyPointId Int?   @map("assembly_point_id")
+  pointName       String @map("point_name")
+  pointAddress    String @map("point_address")
+
+  alert    Alert          @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  students AlertStudent[]
+
+  @@unique([alertId, className])
+  @@map("alert_classes")
+}
+
+model AlertStudent {
+  id                   Int        @id @default(autoincrement())
+  alertId              Int        @map("alert_id")
+  alertClassId         Int        @map("alert_class_id")
+  studentId            Int?       @map("student_id")
+  firstName            String     @map("first_name")
+  lastName             String     @map("last_name")
+  attendance           Attendance @default(UNKNOWN)
+  attendanceAt         DateTime?  @map("attendance_at") @db.Timestamptz(3)
+  attendanceById       Int?       @map("attendance_by_id")
+  /// Czas zmiany na urządzeniu nauczyciela – przy synchronizacji offline wygrywa późniejsza zmiana.
+  clientUpdatedAt      DateTime?  @map("client_updated_at") @db.Timestamptz(3)
+  pickedUpByGuardianId Int?       @map("picked_up_by_guardian_id")
+  pickedUpByName       String?    @map("picked_up_by_name")
+
+  alert      Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  alertClass AlertClass    @relation(fields: [alertClassId], references: [id], onDelete: Cascade)
+  deliveries SmsDelivery[]
+
+  @@unique([alertId, studentId])
+  @@index([alertClassId])
+  @@map("alert_students")
+}
+
+/// Jedna fala komunikatów (start, aktualizacja, odwołanie…) z treścią szablonu użytą do wysyłki.
+model AlertMessage {
+  id          Int         @id @default(autoincrement())
+  alertId     Int         @map("alert_id")
+  kind        MessageKind
+  template    String
+  note        String?
+  createdById Int?        @map("created_by_id")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  alert      Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  deliveries SmsDelivery[]
+
+  @@index([alertId])
+  @@map("alert_messages")
+}
+
+/// Pojedynczy SMS do jednego odbiorcy. Tabela jest jednocześnie kolejką wysyłki.
+model SmsDelivery {
+  id                Int            @id @default(autoincrement())
+  alertId           Int            @map("alert_id")
+  messageId         Int            @map("message_id")
+  alertStudentId    Int?           @map("alert_student_id")
+  guardianId        Int?           @map("guardian_id")
+  guardianName      String?        @map("guardian_name")
+  /// Numer testowy zamiast rodzica (tryb ćwiczeń).
+  testNumberId      Int?           @map("test_number_id")
+  phoneEnc          String         @map("phone_enc")
+  body              String
+  parts             Int
+  encoding          String
+  /// Ćwiczenia: SMS do rodzica tylko symulowany, nic nie wychodzi.
+  simulated         Boolean        @default(false)
+  priority          Int            @default(5)
+  status            DeliveryStatus @default(QUEUED)
+  provider          String?
+  providerMessageId String?        @map("provider_message_id")
+  attempts          Int            @default(0)
+  nextAttemptAt     DateTime       @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lastError         String?        @map("last_error")
+  sentAt            DateTime?      @map("sent_at") @db.Timestamptz(3)
+  deliveredAt       DateTime?      @map("delivered_at") @db.Timestamptz(3)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  alert        Alert           @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  message      AlertMessage    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  alertStudent AlertStudent?   @relation(fields: [alertStudentId], references: [id], onDelete: SetNull)
+  events       DeliveryEvent[]
+
+  @@unique([messageId, alertStudentId, guardianId])
+  @@index([status, nextAttemptAt])
+  @@index([alertId, status])
+  @@index([provider, providerMessageId])
+  @@map("sms_deliveries")
+}
+
+model DeliveryEvent {
+  id         Int            @id @default(autoincrement())
+  deliveryId Int            @map("delivery_id")
+  at         DateTime       @default(now()) @db.Timestamptz(3)
+  status     DeliveryStatus
+  detail     String?
+
+  delivery SmsDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+  @@map("delivery_events")
+}
+
+/// Telefon do rodzica, do którego SMS nie dotarł.
+model CallAttempt {
+  id             Int        @id @default(autoincrement())
+  alertId        Int        @map("alert_id")
+  guardianId     Int?       @map("guardian_id")
+  alertStudentId Int?       @map("alert_student_id")
+  userId         Int        @map("user_id")
+  result         CallResult
+  note           String?
+  at             DateTime   @default(now()) @db.Timestamptz(3)
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@map("call_attempts")
+}
