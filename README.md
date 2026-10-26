@@ -1,20 +1,25 @@
 # Alert Szkolny
 
-Aplikacja do powiadamiania rodziców SMS-em o ewakuacji uczniów – w stylu alertu RCB:
-krótki, jednoznaczny komunikat, z którego rodzic od razu wie, gdzie jest dziecko.
+Aplikacja do wysyłania powiadomień SMS w szkole w razie zagrożenia: wiadomości do **nauczycieli, uczniów
+i rodziców** (całe grupy, klasy albo wybrane osoby) oraz alarm ewakuacyjny w stylu alertu RCB – rodzic od razu
+wie, gdzie jest dziecko. Działa także przy awarii bazy danych lub serwera (tryb awaryjny).
 
 **Wdrażasz w szkole? Zacznij od [docs/WDROZENIE.md](docs/WDROZENIE.md).**
+Zgodność z wytycznymi (9 punktów): [docs/WYMAGANIA.md](docs/WYMAGANIA.md).
 Architektura, model danych i decyzje: [docs/ARCHITEKTURA.md](docs/ARCHITEKTURA.md).
 
 ## Co potrafi
 
 | Obszar | Funkcje |
 |---|---|
-| Dane | szkoła, klasy, uczniowie, opiekunowie (szyfrowane numery), punkty zbiórki, import CSV/XLSX z dziennika |
+| Dane | grupy **nauczyciele / uczniowie / rodzice**, klasy, punkty zbiórki; wszystkie numery szyfrowane; import CSV/XLSX (uczniowie z rodzicami, nauczyciele) z raportem błędnych numerów |
+| Wiadomości SMS | całe grupy, klasy (uczniowie i/lub rodzice), pojedyncze osoby; dowolna treść; wybór **nadawcy** (lista zatwierdzonych w bramce); podgląd liczby odbiorców i kosztu; PIN |
+| Raporty | przy każdej wiadomości: doręczone / nie dotarło / **błędne numery**, ponowienie nieudanych, CSV; zbiorczo „Numery do poprawy” |
+| Tryb awaryjny | baza nie działa → serwer wysyła z zaszyfrowanej kopii kontaktów i dopisuje wysyłki po powrocie bazy; serwer nie działa → **kopia kontaktów w telefonie** (hasło do konta): SMS z telefonu, numery do panelu bramki |
 | Szablony SMS | 5 rodzajów komunikatów, edytor ze znacznikami, podgląd na żywo, licznik znaków i części, tryb bez polskich znaków |
 | Alarm | kreator w 4 krokach (zdarzenie → zakres → punkty zbiórki → podgląd), PIN alarmowy, cała szkoła / klasy / uczniowie, różne punkty dla klas |
 | Kolejne komunikaty | zmiana punktu zbiórki, odwołanie alarmu, automatyczne potwierdzenie obecności, informacja o odbiorze dziecka |
-| Wysyłka | kolejka z ponawianiem, limit SMS/s, bramka zapasowa z automatycznym przełączeniem, statusy doręczeń |
+| Wysyłka | **pule**: ta sama treść do wielu numerów jednym zapytaniem (SMSAPI, SerwerSMS), zapytania równolegle; kolejka z ponawianiem i priorytetami (alarm pierwszy), bramka zapasowa z automatycznym przełączeniem, statusy doręczeń |
 | Monitoring | centrum alertu na żywo, lista „nie dotarło” z ponowną wysyłką i telefonem do rodzica, raport CSV, historia |
 | Lista obecności | na telefonie nauczyciela, duże kafelki, odbiór tylko przez upoważnione osoby, **działa bez zasięgu** |
 | Ćwiczenia | cały przebieg na prawdziwych danych, SMS-y do rodziców tylko symulowane, przykład na numery testowe |
@@ -37,7 +42,7 @@ npm run setup        # .env z losowymi kluczami (szyfrowanie, hasło kont demo, 
 ```bash
 npm run db:local     # terminal 1: baza (zostaw włączoną)
 npm run db:deploy    # terminal 2: tabele
-npm run db:seed      # fikcyjna szkoła: 10 klas, 121 uczniów, 3 punkty zbiórki, 3 konta
+npm run db:seed      # fikcyjna szkoła: 10 klas, 121 uczniów, 13 nauczycieli, 3 punkty zbiórki, 3 konta
 npm run dev          # API (port 3000) + interfejs (port 5180)
 ```
 
@@ -85,6 +90,12 @@ Potem uruchom serwer ponownie i sprawdź połączenie w **Test SMS** – pokaże
 
 SMS-fly pozwala odpytywać statusy, więc **„doręczono / nie doręczono” działa także lokalnie** (sprawdzane co 15 s).
 
+- **Pule**: SMS-y z tą samą treścią i nadawcą idą jednym zapytaniem do wielu numerów – SMSAPI i SerwerSMS
+  (`SMS_BATCH_SIZE`, domyślnie 500). SMS-fly przyjmuje jeden numer na zapytanie – wtedy zapytania idą równolegle.
+  `SMS_CONCURRENCY` – ile zapytań naraz, `SMS_RATE_PER_SECOND` – limit zapytań na sekundę.
+- **Nadawca**: w „Wyślij SMS” lista nazw zatwierdzonych w bramce (SMSAPI, SMS-fly); bez wyboru – nadawca z „Dane szkoły”.
+- **Błędne numery**: numer odrzucony przez bramkę jest oznaczany i nie jest ponawiany – trafia do „Numery do poprawy”.
+
 - **Failover**: błąd bramki (token, brak środków, awaria, sieć) → kolejna próba przez zapasową; po 3 awariach z rzędu
   główna jest pomijana przez minutę. Zły numer odbiorcy nie powoduje przełączenia.
 - **Ponowienia**: błędy przejściowe ponawiane po 2 s, 5 s, 15 s, 30 s, 60 s, potem status „błąd” i lista „nie dotarło”.
@@ -92,6 +103,17 @@ SMS-fly pozwala odpytywać statusy, więc **„doręczono / nie doręczono” dz
   na serwer) – lokalnie kończą na „wysłano”. SMS-fly nie wymaga tego (statusy są odpytywane).
 - **Ochrona danych demo**: prawdziwego alarmu nie da się wysłać, dopóki w bazie są numery z danych demonstracyjnych
   (`+48 790 00x xxx` – mogą należeć do obcych osób). Usuń dane demo i zaimportuj prawdziwe.
+
+## Tryb awaryjny (awaria bazy lub serwera)
+
+- Serwer co 5 minut zapisuje **zaszyfrowaną kopię** kontaktów, kont i sesji (`EMERGENCY_DATA_DIR`). Gdy baza nie
+  odpowiada (sprawdzane co 5 s), zalogowani pracują dalej, a **Tryb awaryjny** (`/awaryjny`) wysyła SMS-y prosto
+  przez bramkę. Przebieg zapisuje się w zaszyfrowanym dzienniku i po powrocie bazy trafia do „Wiadomości”
+  (z raportem i ponowieniem) oraz do dziennika zdarzeń. Serwer startuje także bez bazy.
+- **Kopia w urządzeniu** („Moje konto”): kontakty szyfrowane w przeglądarce (WebCrypto) kluczem z hasła do konta,
+  odświeżane co 15 minut. Bez serwera: SMS z aplikacji SMS telefonu (paczki po 20 numerów), kopiowanie numerów
+  lub plik CSV do panelu bramki, lista do dzwonienia. Działania wracają do dziennika zdarzeń po odzyskaniu sieci.
+  Wymaga HTTPS (lokalnie: `localhost`).
 
 ## Lista obecności bez zasięgu
 
@@ -113,7 +135,7 @@ W `.env` ustaw `API_HOST=0.0.0.0`, potem `npm start` i otwórz na telefonie `htt
 
 | Polecenie | Co robi |
 |---|---|
-| `npm test` | testy jednostkowe (2FA, szyfrowanie, numery, import, treść SMS, bramki, failover, kolejka) |
+| `npm test` | testy jednostkowe (2FA, szyfrowanie, numery, import, grupy odbiorców, treść SMS, bramki, pule, failover) |
 | `npm run typecheck` | sprawdzenie typów we wszystkich pakietach |
 | `npm run audit:verify` | weryfikacja integralności dziennika zdarzeń |
 | `npm run db:seed` | **czyści** dane szkoły, konta i alerty, wgrywa dane demo (zablokowane przy `NODE_ENV=production`) |
@@ -122,8 +144,10 @@ W `.env` ustaw `API_HOST=0.0.0.0`, potem `npm start` i otwórz na telefonie `htt
 
 ## Bezpieczeństwo i RODO
 
-- **Numery telefonów** szyfrowane w bazie (AES-256-GCM, osobny kontekst dla opiekunów, numerów testowych i kolejki);
-  wyszukiwanie przez HMAC. W interfejsie maskowane, pełny numer na żądanie – zawsze z wpisem w dzienniku.
+- **Numery telefonów** (nauczyciele, uczniowie, rodzice) szyfrowane w bazie (AES-256-GCM, osobny kontekst dla każdej
+  grupy, numerów testowych i kolejki); wyszukiwanie przez HMAC. W interfejsie maskowane, pełny numer na żądanie –
+  zawsze z wpisem w dzienniku. Imiona, nazwiska i klasy są jawne (wyszukiwanie) – na serwerze używaj szyfrowanego dysku.
+- **Kopie awaryjne** (na serwerze i w urządzeniach) szyfrowane; każde pobranie kopii do urządzenia jest w dzienniku.
 - **SMS** zawiera tylko imię dziecka i klasę (bez nazwiska).
 - **Logowanie**: argon2id + TOTP (obowiązkowe dla administratora i dyrekcji), kody zapasowe, blokady po błędnych próbach.
 - **PIN alarmowy** (osobny od hasła) przy starcie, zmianie punktu i zakończeniu alertu; 5 błędów = blokada 5 minut.
@@ -131,8 +155,8 @@ W `.env` ustaw `API_HOST=0.0.0.0`, potem `npm start` i otwórz na telefonie `htt
 - **Dziennik zdarzeń**: kto, kiedy, co (start alertu, każdy komunikat, obecność, telefony, odsłonięcia numerów, zmiany
   szablonów z treścią przed/po). Trigger w bazie blokuje zmiany, łańcuch hashy wykrywa manipulację.
   Pełna lista „do kogo i jaką treść” jest w historii alertu (tabela wysyłek).
-- **Retencja**: po `ALERT_RETENTION_DAYS` (domyślnie 365) od zakończenia alertu usuwane są z jego historii nazwiska,
-  numery i treści SMS; zostają liczby i przebieg.
+- **Retencja**: po `ALERT_RETENTION_DAYS` (domyślnie 365) od zakończenia alertu (i od wysłania wiadomości) usuwane są
+  z historii nazwiska, numery i treści SMS; zostają liczby i przebieg.
 - **Minimalizacja**: import pomija PESEL, adresy, e-maile; plik importu nie jest zapisywany; usunięcie ucznia usuwa
   numery opiekunów bez innych dzieci w szkole.
 
@@ -144,9 +168,10 @@ od kopii bazy. `.env` jest w `.gitignore`. Rotacja: dopisz nowy klucz (`v1:…,v
 ## Struktura
 
 ```
-apps/api        serwer: Fastify, Prisma, PostgreSQL; kolejka SMS i bramki w src/sms, logika alertu w src/alerts
+apps/api        serwer: Fastify, Prisma, PostgreSQL; kolejka SMS i bramki w src/sms, alert w src/alerts,
+                wiadomości do grup w src/notices, tryb awaryjny (kopia, dziennik) w src/emergency
 apps/web        interfejs: React, Vite, Tailwind; service worker w public/sw.js
-packages/shared treść SMS (licznik, szablony), typy i stałe wspólne dla serwera i interfejsu
+packages/shared treść SMS (licznik, szablony), grupy i wybór odbiorców, typy wspólne dla serwera i interfejsu
 scripts         generator .env, lokalna baza
 sample-data     przykładowy plik do importu
 docs            architektura i decyzje

@@ -11,7 +11,7 @@ import type {
   AttendanceValue,
   StatusCounts,
 } from '@alert/shared';
-import { plural } from '@alert/shared';
+import { DEMO_PHONE_PREFIX, plural } from '@alert/shared';
 import { CTX, fieldCrypto, prisma } from '../db';
 import { notifyAlertChanged } from '../lib/events';
 import { HttpError } from '../lib/http';
@@ -47,7 +47,7 @@ export const alertInputSchema = z
 export type AlertInput = z.infer<typeof alertInputSchema>;
 
 /** Numery z danych demonstracyjnych (seed i plik przykładowy) – nie wolno do nich wysłać prawdziwych SMS-ów. */
-const DEMO_PREFIX = '+4879000';
+const DEMO_PREFIX = DEMO_PHONE_PREFIX;
 
 interface GuardianRecipient {
   guardianId: number;
@@ -325,6 +325,8 @@ export async function startAlert(input: AlertInput, userId: number, idempotencyK
             alertStudentId: alertStudentId.get(s.studentId)!,
             guardianId: g.guardianId,
             guardianName: g.name,
+            contactKey: `p:${g.guardianId}`,
+            audience: 'PARENTS' as const,
             phoneEnc: reencrypt(g.phone),
             body: s.body,
             parts: s.parts,
@@ -403,6 +405,8 @@ async function sendWave(opts: {
         alertStudentId: s.id,
         guardianId: g.guardianId,
         guardianName: g.name,
+        contactKey: `p:${g.guardianId}`,
+        audience: 'PARENTS' as const,
         phoneEnc: reencrypt(g.phone),
         body,
         parts: info.parts,
@@ -536,6 +540,8 @@ export async function markAttendance(input: z.infer<typeof attendanceSchema>, us
         alertStudentId: student.id,
         guardianId: g.guardianId,
         guardianName: g.name,
+        contactKey: `p:${g.guardianId}`,
+        audience: 'PARENTS' as const,
         phoneEnc: reencrypt(g.phone),
         body,
         parts: info.parts,

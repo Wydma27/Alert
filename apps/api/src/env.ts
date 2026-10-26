@@ -36,8 +36,16 @@ const schema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
-  /** Limit wysyłki (SMS/s) – dopasuj do limitu konta w bramce. */
+  /** Limit zapytań do bramki na sekundę – dopasuj do limitu konta. Paczka wielu numerów to jedno zapytanie. */
   SMS_RATE_PER_SECOND: z.coerce.number().positive().default(10),
+  /** Pula: ile numerów z tą samą treścią w jednym zapytaniu (SMSAPI, SerwerSMS). */
+  SMS_BATCH_SIZE: z.coerce.number().int().min(1).max(10_000).default(500),
+  /** Pula: ile zapytań do bramki naraz. */
+  SMS_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(10),
+  /** Kopia awaryjna kontaktów i dziennik wysyłek bez bazy (zaszyfrowane). Względem katalogu apps/api. */
+  EMERGENCY_DATA_DIR: z.string().default('../../.data/emergency'),
+  /** Co ile minut odświeżać kopię awaryjną z bazy. */
+  SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(1440).default(5),
   /** Publiczny adres HTTPS aplikacji, pod który bramki odsyłają raporty doręczeń (po wdrożeniu na serwer). */
   SMS_CALLBACK_BASE_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   SMS_WEBHOOK_TOKEN: z.string().optional(),

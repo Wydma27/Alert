@@ -1,7 +1,7 @@
 // Dane demonstracyjne: fikcyjna szkoła, klasy, uczniowie, opiekunowie, punkty zbiórki i konta.
 // Wszystkie nazwiska i numery są zmyślone. Uruchom: npm run db:seed
 // Skrypt czyści dane szkoły (nie dziennik zdarzeń) – NIE uruchamiaj go na danych produkcyjnych.
-import { prisma } from '../src/db';
+import { CTX, fieldCrypto, prisma } from '../src/db';
 import { writeAudit } from '../src/lib/audit';
 import { findOrCreateGuardian } from '../src/lib/guardians';
 import { hashSecret } from '../src/lib/password';
@@ -57,6 +57,8 @@ const nextPhone = () => `+48790000${String(++phoneCounter).padStart(3, '0')}`;
 
 async function main() {
   console.log('Czyszczenie danych szkoły…');
+  await prisma.notice.deleteMany();
+  await prisma.teacher.deleteMany();
   await prisma.alert.deleteMany();
   await prisma.studentGuardian.deleteMany();
   await prisma.student.deleteMany();
@@ -110,7 +112,15 @@ async function main() {
         const student = await tx.student.create({
           data: { firstName, lastName, externalId: `DEMO-${String(studentNo).padStart(4, '0')}`, classId: classIds.get(className)! },
         });
-        // Co ~15. uczeń bez numeru (żeby ostrzeżenia było widać), część z jednym opiekunem.
+        // Starsze klasy: większość uczniów ma własny telefon (grupa "Uczniowie").
+        if ((className === '7A' || className === '8A') && studentNo % 4 !== 0) {
+          const own = nextPhone();
+          await tx.student.update({
+            where: { id: student.id },
+            data: { phoneEnc: fieldCrypto.encrypt(own, CTX.studentPhone), phoneHmac: fieldCrypto.blindIndex(own, CTX.studentPhone) },
+          });
+        }
+        // Co ~15. uczeń bez numeru opiekuna (żeby ostrzeżenia było widać), część z jednym opiekunem.
         if (studentNo % 15 === 0) return;
         const mother = await findOrCreateGuardian(tx, nextPhone(), `${pick(PARENT_F)} ${lastF}`);
         await tx.studentGuardian.create({ data: { studentId: student.id, guardianId: mother.id, priority: 1 } });
@@ -133,6 +143,26 @@ async function main() {
     students++;
   }
 
+  console.log('Nauczyciele…');
+  const TEACHERS: [string, string, string][] = [
+    ['Barbara', 'Kowalczyk', 'dyrektor'],
+    ['Grażyna', 'Wójcik', 'wicedyrektor'],
+    ['Teresa', 'Mazur', 'sekretariat'],
+    ...CLASSES.map((c, i): [string, string, string] => [pick(PARENT_F), LAST_NAMES[(i + 3) % LAST_NAMES.length]![1], `wychowawca ${c}`]),
+  ];
+  for (const [firstName, lastName, position] of TEACHERS) {
+    const phone = nextPhone();
+    await prisma.teacher.create({
+      data: {
+        firstName,
+        lastName,
+        position,
+        phoneEnc: fieldCrypto.encrypt(phone, CTX.teacherPhone),
+        phoneHmac: fieldCrypto.blindIndex(phone, CTX.teacherPhone),
+      },
+    });
+  }
+
   console.log('Konta…');
   const passwordHash = await hashSecret(seedPassword!);
   await prisma.user.createMany({
@@ -143,8 +173,8 @@ async function main() {
     ],
   });
 
-  await writeAudit({ action: 'seed.demo_data', details: { students, classes: CLASSES.length } });
-  console.log(`Gotowe: ${CLASSES.length} klas, ${students} uczniów, ${phoneCounter} numerów opiekunów, 3 punkty zbiórki.`);
+  await writeAudit({ action: 'seed.demo_data', details: { students, classes: CLASSES.length, teachers: TEACHERS.length } });
+  console.log(`Gotowe: ${CLASSES.length} klas, ${students} uczniów, ${TEACHERS.length} nauczycieli, ${phoneCounter} numerów, 3 punkty zbiórki.`);
   console.log('Konta: admin@szkola.test, dyrektor@szkola.test, nauczyciel@szkola.test – hasło: SEED_PASSWORD z .env');
 }
 

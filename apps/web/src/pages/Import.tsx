@@ -1,15 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ChangeEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   IMPORT_FIELD_LABELS,
   IMPORT_FIELDS,
+  TEACHER_IMPORT_FIELD_LABELS,
+  TEACHER_IMPORT_FIELDS,
   type FullNameOrder,
   type ImportCommitResponse,
   type ImportField,
   type ImportMapping,
+  type ImportType,
   type ImportUploadResponse,
   type ImportValidationResponse,
+  type TeacherImportField,
 } from '@alert/shared';
 import { Badge, Button, Card, Checkbox, Field, Notice, PageHeader, Select } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
@@ -17,8 +21,15 @@ import { plural } from '../lib/format';
 
 type Mode = 'upsert' | 'sync';
 
+const FIELD_SETS: Record<ImportType, { fields: readonly (ImportField | TeacherImportField)[]; labels: Record<string, string> }> = {
+  students: { fields: IMPORT_FIELDS, labels: IMPORT_FIELD_LABELS },
+  teachers: { fields: TEACHER_IMPORT_FIELDS, labels: TEACHER_IMPORT_FIELD_LABELS },
+};
+
 export function ImportPage() {
   const queryClient = useQueryClient();
+  const [params] = useSearchParams();
+  const [type, setType] = useState<ImportType>(params.get('typ') === 'nauczyciele' ? 'teachers' : 'students');
   const [upload, setUpload] = useState<ImportUploadResponse | null>(null);
   const [mapping, setMapping] = useState<ImportMapping>({});
   const [order, setOrder] = useState<FullNameOrder>('LAST_FIRST');
@@ -59,7 +70,7 @@ export function ImportPage() {
     void run(async () => {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.upload<ImportUploadResponse>('/import/upload', form);
+      const res = await api.upload<ImportUploadResponse>(`/import/upload?type=${type}`, form);
       setUpload(res);
       setMapping(res.suggestedMapping);
       setValidation(null);
@@ -69,7 +80,7 @@ export function ImportPage() {
 
   const options = () => ({ mapping, fullNameOrder: order, mode });
 
-  function changeMapping(field: ImportField, value: string) {
+  function changeMapping(field: ImportField | TeacherImportField, value: string) {
     setValidation(null);
     setMapping((m) => {
       const next = { ...m };
@@ -79,6 +90,9 @@ export function ImportPage() {
     });
   }
 
+  const teachers = (upload?.type ?? type) === 'teachers';
+  const who = (n: number) => (teachers ? plural(n, 'osobę', 'osoby', 'osób') : plural(n, 'ucznia', 'uczniów', 'uczniów'));
+
   if (result) {
     return (
       <>
@@ -86,16 +100,22 @@ export function ImportPage() {
         <Card className="max-w-2xl">
           <Notice tone="success">Import zakończony.</Notice>
           <ul className="my-4 space-y-1 text-lg">
-            <li>Dodano: {plural(result.created, 'ucznia', 'uczniów', 'uczniów')}</li>
-            <li>Zaktualizowano: {plural(result.updated, 'ucznia', 'uczniów', 'uczniów')}</li>
-            {result.deleted > 0 && <li>Usunięto: {plural(result.deleted, 'ucznia', 'uczniów', 'uczniów')}</li>}
+            <li>Dodano: {who(result.created)}</li>
+            <li>Zaktualizowano: {who(result.updated)}</li>
+            {result.deleted > 0 && <li>Usunięto: {who(result.deleted)}</li>}
             {result.classesCreated > 0 && <li>Nowe klasy: {result.classesCreated}</li>}
             {result.guardiansDeleted > 0 && <li>Usunięte nieużywane numery opiekunów: {result.guardiansDeleted}</li>}
           </ul>
           <div className="flex flex-wrap gap-2">
-            <Link to="/klasy" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
-              Przypisz punkty zbiórki klasom
-            </Link>
+            {teachers ? (
+              <Link to="/nauczyciele" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
+                Lista nauczycieli
+              </Link>
+            ) : (
+              <Link to="/klasy" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
+                Przypisz punkty zbiórki klasom
+              </Link>
+            )}
             <Button variant="secondary" onClick={reset}>
               Importuj kolejny plik
             </Button>
@@ -107,7 +127,9 @@ export function ImportPage() {
 
   return (
     <>
-      <PageHeader title="Import danych">Uczniowie i numery opiekunów z pliku CSV lub XLSX (np. eksport z dziennika elektronicznego).</PageHeader>
+      <PageHeader title="Import danych">
+        Uczniowie z numerami rodziców (i własnymi) albo nauczyciele – z pliku CSV lub Excel (XLSX), np. eksport z dziennika elektronicznego.
+      </PageHeader>
       {error && (
         <div className="mb-4">
           <Notice tone="error">{error}</Notice>
@@ -116,18 +138,46 @@ export function ImportPage() {
 
       {!upload && (
         <Card className="max-w-2xl">
-          <h2 className="mb-2 text-xl font-bold">1. Wybierz plik</h2>
+          <h2 className="mb-2 text-xl font-bold">1. Co importujesz?</h2>
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {(
+              [
+                ['students', 'Uczniowie i rodzice'],
+                ['teachers', 'Nauczyciele i pracownicy'],
+              ] as [ImportType, string][]
+            ).map(([t, label]) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={type === t}
+                onClick={() => setType(t)}
+                className={`min-h-14 rounded-xl border-4 px-4 py-2 text-lg font-bold ${type === t ? 'border-ink bg-ink text-white' : 'border-line bg-surface hover:border-ink'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <ul className="mb-4 list-disc space-y-1 pl-5">
             <li>Pierwszy wiersz to nagłówki kolumn.</li>
+            {type === 'students' ? (
+              <>
+                <li>
+                  Potrzebne kolumny: <strong>imię i nazwisko ucznia</strong> (osobno lub razem), <strong>klasa</strong>,{' '}
+                  <strong>telefon opiekuna</strong> (do trzech opiekunów) i/lub <strong>telefon ucznia</strong>.
+                </li>
+                <li>Jeden wiersz = uczeń albo jeden wiersz = opiekun – oba układy są obsługiwane.</li>
+              </>
+            ) : (
+              <li>
+                Potrzebne kolumny: <strong>imię i nazwisko</strong> (osobno lub razem) i <strong>telefon</strong>; opcjonalnie <strong>funkcja</strong>{' '}
+                (np. „wychowawca 3B”).
+              </li>
+            )}
             <li>
-              Potrzebne kolumny: <strong>imię i nazwisko ucznia</strong> (osobno lub razem), <strong>klasa</strong>,{' '}
-              <strong>telefon opiekuna</strong> (do trzech opiekunów).
+              Kolumny typu PESEL, adres czy e-mail są <strong>pomijane</strong> – system przechowuje tylko to, co potrzebne do powiadomień.
             </li>
-            <li>Jeden wiersz = uczeń albo jeden wiersz = opiekun – oba układy są obsługiwane.</li>
-            <li>
-              Kolumny typu PESEL, adres czy e-mail są <strong>pomijane</strong> – system przechowuje tylko to, co potrzebne do alarmu.
-            </li>
-            <li>Plik nie jest zapisywany na serwerze.</li>
+            <li>Błędne numery (stacjonarne, za krótkie) zobaczysz w raporcie przed zapisem.</li>
+            <li>Plik nie jest zapisywany na serwerze. Stary format .xls zapisz w Excelu jako .xlsx albo CSV.</li>
           </ul>
           <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
             {busy ? 'Wczytywanie…' : 'Wybierz plik CSV lub XLSX'}
@@ -156,8 +206,8 @@ export function ImportPage() {
             )}
 
             <div className="grid gap-3 md:grid-cols-2">
-              {IMPORT_FIELDS.map((field) => (
-                <Field key={field} label={IMPORT_FIELD_LABELS[field]}>
+              {FIELD_SETS[upload.type].fields.map((field) => (
+                <Field key={field} label={FIELD_SETS[upload.type].labels[field]!}>
                   {(id) => (
                     <Select id={id} value={mapping[field] ?? ''} onChange={(e) => changeMapping(field, e.target.value)}>
                       <option value="">— nie importuj —</option>
@@ -238,7 +288,7 @@ export function ImportPage() {
                   }}
                 />
                 <span>
-                  <strong>Dodaj i zaktualizuj</strong> – uczniowie spoza pliku zostają bez zmian.
+                  <strong>Dodaj i zaktualizuj</strong> – {teachers ? 'osoby' : 'uczniowie'} spoza pliku zostają bez zmian.
                 </span>
               </label>
               <label className="flex min-h-12 items-start gap-2">
@@ -253,7 +303,7 @@ export function ImportPage() {
                   }}
                 />
                 <span>
-                  <strong>Pełna synchronizacja</strong> – uczniowie, których nie ma w pliku, zostaną <strong>usunięci</strong> (np. nowy rok
+                  <strong>Pełna synchronizacja</strong> – {teachers ? 'osoby' : 'uczniowie'}, których nie ma w pliku, zostaną <strong>usunięci</strong> (np. nowy rok
                   szkolny, pełny eksport z dziennika).
                 </span>
               </label>
@@ -307,6 +357,17 @@ function ValidationResult({
   const errors = v.issues.filter((i) => i.level === 'error');
   const warnings = v.issues.filter((i) => i.level === 'warning');
   const nothingToDo = v.toCreate + v.toUpdate + v.toDelete === 0;
+  const teachers = v.type === 'teachers';
+
+  function downloadIssues() {
+    const lines = ['wiersz;poziom;opis', ...v.issues.map((i) => `${i.row};${i.level === 'error' ? 'pominięty' : 'ostrzeżenie'};"${i.message.replace(/"/g, '""')}"`)];
+    const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'import-uwagi.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   return (
     <Card>
@@ -318,9 +379,15 @@ function ValidationResult({
         <Summary label="do usunięcia" value={v.toDelete} danger={v.toDelete > 0} />
       </div>
       <p className="mb-3">
-        W pliku: {plural(v.studentsInFile, 'uczeń', 'uczniów', 'uczniów')}, {plural(v.guardiansInFile, 'numer', 'numery', 'numerów')}{' '}
-        opiekunów.
-        {v.newClasses.length > 0 && <> Nowe klasy: {v.newClasses.join(', ')}.</>}
+        {teachers ? (
+          <>W pliku: {plural(v.studentsInFile, 'osoba z poprawnym numerem', 'osoby z poprawnym numerem', 'osób z poprawnym numerem')}.</>
+        ) : (
+          <>
+            W pliku: {plural(v.studentsInFile, 'uczeń', 'uczniów', 'uczniów')}, {plural(v.guardiansInFile, 'numer', 'numery', 'numerów')} opiekunów
+            {v.studentPhonesInFile > 0 && <>, {plural(v.studentPhonesInFile, 'własny numer ucznia', 'własne numery uczniów', 'własnych numerów uczniów')}</>}.
+            {v.newClasses.length > 0 && <> Nowe klasy: {v.newClasses.join(', ')}.</>}
+          </>
+        )}
       </p>
       {v.studentsWithoutPhone > 0 && (
         <div className="mb-3">
@@ -334,9 +401,12 @@ function ValidationResult({
       {v.issues.length > 0 && (
         <details className="mb-4" open={v.issues.length <= 15}>
           <summary className="cursor-pointer font-semibold">
-            Uwagi do wierszy: {errors.length > 0 && <Badge tone="error">{errors.length} pominiętych</Badge>}{' '}
+            Uwagi do wierszy (w tym błędne numery): {errors.length > 0 && <Badge tone="error">{errors.length} pominiętych</Badge>}{' '}
             {warnings.length > 0 && <Badge tone="warning">{warnings.length} ostrzeżeń</Badge>}
           </summary>
+          <button type="button" className="mt-2 font-semibold underline" onClick={downloadIssues}>
+            Pobierz listę uwag (CSV)
+          </button>
           <ul className="mt-2 max-h-80 overflow-y-auto rounded-lg border-2 border-line">
             {v.issues.map((i, n) => (
               <li key={n} className={`border-b border-line px-3 py-2 last:border-0 ${i.level === 'error' ? 'bg-red-50' : ''}`}>
@@ -351,7 +421,11 @@ function ValidationResult({
         <div className="mb-4">
           <Notice tone="error">
             <Checkbox
-              label={`Rozumiem, że ${plural(v.toDelete, 'uczeń zostanie usunięty', 'uczniów zostanie usuniętych', 'uczniów zostanie usuniętych')} razem z numerami opiekunów.`}
+              label={
+                teachers
+                  ? `Rozumiem, że ${plural(v.toDelete, 'osoba zostanie usunięta', 'osoby zostaną usunięte', 'osób zostanie usuniętych')} z listy nauczycieli.`
+                  : `Rozumiem, że ${plural(v.toDelete, 'uczeń zostanie usunięty', 'uczniów zostanie usuniętych', 'uczniów zostanie usuniętych')} razem z numerami opiekunów.`
+              }
               checked={confirmDelete}
               onChange={(e) => setConfirmDelete(e.target.checked)}
             />

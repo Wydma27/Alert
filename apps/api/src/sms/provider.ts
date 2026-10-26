@@ -9,6 +9,13 @@ export interface SendRequest {
   reference?: string;
 }
 
+/** Ta sama treść do wielu odbiorców – jedno zapytanie do bramki (pula). */
+export interface BatchRequest {
+  to: string[];
+  text: string;
+  from?: string;
+}
+
 export type SendResult =
   | { ok: true; messageId: string; status: string; parts: number | null; points: number | null }
   | {
@@ -19,6 +26,8 @@ export type SendResult =
       retryable: boolean;
       /** Problem po stronie bramki (token, środki, nadawca, awaria) – spróbuj bramki zapasowej. */
       failover: boolean;
+      /** Bramka odrzuciła numer odbiorcy (nieprawidłowy / nieistniejący) – numer do poprawy w danych. */
+      badRecipient?: boolean;
     };
 
 export interface GatewayStatus {
@@ -35,10 +44,24 @@ export interface SmsProvider {
   readonly name: string;
   readonly live: boolean;
   send(req: SendRequest): Promise<SendResult>;
+  /** Wysyłka do wielu numerów jednym zapytaniem. Wyniki w tej samej kolejności co `to`. */
+  sendBatch?(req: BatchRequest): Promise<SendResult[]>;
   status(): Promise<GatewayStatus>;
   /** Bramki, które pozwalają odpytać status (działa bez publicznego adresu na raporty). */
   checkStatus?(messageId: string): Promise<DlrStatus | null>;
+  /** Nazwy nadawcy zatwierdzone na koncie; null = bramka nie podaje listy. */
+  senders?(): Promise<string[] | null>;
 }
 
 /** Statusy doręczenia, na które mapujemy raporty bramek. */
 export type DlrStatus = 'SENT' | 'DELIVERED' | 'UNDELIVERED' | 'FAILED';
+
+/** Same cyfry numeru – bramki zwracają numery w różnych formatach (z "+" lub bez). */
+export function digitsOnly(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+/** Ten sam błąd dla wszystkich numerów z paczki (np. awaria sieci). */
+export function failAll(count: number, result: Extract<SendResult, { ok: false }>): SendResult[] {
+  return Array.from({ length: count }, () => ({ ...result }));
+}

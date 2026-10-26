@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { ClassDto, GuardianLinkDto, StudentDetailDto } from '@alert/shared';
+import { PhoneReveal } from '../components/PhoneReveal';
 import { Badge, Button, Card, Checkbox, ConfirmModal, Field, Loading, Modal, Notice, PageHeader, Select, TextInput } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -92,6 +93,8 @@ export function StudentDetailPage() {
         {s.externalId && <> · ID w dzienniku: {s.externalId}</>}
       </PageHeader>
 
+      <OwnPhoneCard student={s} canEdit={canEdit} onSaved={afterChange} />
+
       <Card>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-bold">Opiekunowie</h2>
@@ -123,7 +126,7 @@ export function StudentDetailPage() {
                   <div className="font-bold">
                     {g.priority}. {g.displayName ?? 'Opiekun (bez nazwiska)'}
                   </div>
-                  <PhoneReveal guardianId={g.guardianId} masked={g.phoneMasked} />
+                  <PhoneReveal path={`/guardians/${g.guardianId}/phone`} masked={g.phoneMasked} />
                   <div className="mt-1 flex flex-wrap gap-2">
                     {g.receivesAlerts ? <Badge tone="success">dostaje SMS</Badge> : <Badge tone="warning">bez SMS</Badge>}
                     {g.canPickUp ? <Badge>może odebrać dziecko</Badge> : <Badge tone="error">NIE może odebrać dziecka</Badge>}
@@ -290,38 +293,87 @@ export function StudentDetailPage() {
   );
 }
 
-/** Numer jest maskowany; pełny pobierany na żądanie (wpis w dzienniku zdarzeń). */
-function PhoneReveal({ guardianId, masked }: { guardianId: number; masked: string }) {
-  const [phone, setPhone] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+/** Własny numer ucznia – grupa „Uczniowie” w wiadomościach SMS (np. starsze klasy). */
+function OwnPhoneCard({
+  student,
+  canEdit,
+  onSaved,
+}: {
+  student: StudentDetailDto;
+  canEdit: boolean;
+  onSaved: (s: StudentDetailDto) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [phone, setPhone] = useState('');
+  const save = useMutation({
+    mutationFn: (value: string | null) => api.put<StudentDetailDto>(`/students/${student.id}/phone`, { phone: value }),
+    onSuccess: async (data) => {
+      setEditing(false);
+      setPhone('');
+      await onSaved(data);
+    },
+  });
 
-  async function reveal() {
-    setBusy(true);
-    try {
-      setPhone((await api.get<{ phone: string }>(`/guardians/${guardianId}/phone`)).phone);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (phone) {
-    return (
-      <a href={`tel:${phone.replace(/\s/g, '')}`} className="font-mono text-lg font-semibold underline">
-        {phone}
-      </a>
-    );
-  }
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="font-mono text-lg">{masked}</span>
-      <button type="button" className="text-sm font-semibold underline" onClick={() => void reveal()} disabled={busy}>
-        {busy ? 'Pobieranie…' : 'Pokaż numer'}
-      </button>
-      {error && <span className="text-sm text-alarm">{error}</span>}
-    </div>
+    <Card className="mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-bold">Telefon ucznia</h2>
+          <p className="text-muted">Własny numer ucznia – do wiadomości dla grupy „Uczniowie”. Alarm ewakuacyjny idzie do opiekunów.</p>
+          <div className="mt-1">
+            {student.phoneMasked ? (
+              <PhoneReveal path={`/students/${student.id}/phone`} masked={student.phoneMasked} />
+            ) : (
+              <span className="text-muted">brak numeru</span>
+            )}
+          </div>
+        </div>
+        {canEdit && !editing && (
+          <div className="flex gap-1">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                save.reset();
+                setEditing(true);
+              }}
+            >
+              {student.phoneMasked ? 'Zmień' : 'Dodaj numer'}
+            </Button>
+            {student.phoneMasked && (
+              <Button variant="ghost" busy={save.isPending} onClick={() => save.mutate(null)}>
+                Usuń
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {editing && (
+        <form
+          className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate(phone);
+          }}
+        >
+          <div className="flex-1">
+            <Field label="Numer komórkowy ucznia">
+              {(id) => <TextInput id={id} inputMode="tel" autoComplete="off" required value={phone} onChange={(e) => setPhone(e.target.value)} />}
+            </Field>
+          </div>
+          <Button type="submit" busy={save.isPending}>
+            Zapisz
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+            Anuluj
+          </Button>
+        </form>
+      )}
+      {save.error && (
+        <div className="mt-2">
+          <Notice tone="error">{errorMessage(save.error)}</Notice>
+        </div>
+      )}
+    </Card>
   );
 }
 

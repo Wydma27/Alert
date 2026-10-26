@@ -19,6 +19,7 @@ import {
 } from '../lib/password';
 import { generateTotpSecret, otpauthUri, verifyTotp } from '../lib/totp';
 import { currentUser, endSession, requireAnySession, requireLogin, startSession } from '../auth/session';
+import { forgetSessions } from '../emergency/snapshot';
 
 const loginRateLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
@@ -223,6 +224,7 @@ export async function authRoutes(app: FastifyInstance) {
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashSecret(body.newPassword) } });
     // Wyloguj pozostałe urządzenia.
     await prisma.session.deleteMany({ where: { userId: user.id, id: { not: req.auth!.session.id } } });
+    forgetSessions({ userId: user.id, exceptSessionId: req.auth!.session.id });
     await audit(req, { action: 'auth.password.changed' });
     return { ok: true };
   });

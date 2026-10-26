@@ -2,6 +2,7 @@
 // { auth: { key }, action, data }. Odpowiedź: { success: 1, date, data } albo { success: 0, error: { code, description } }.
 // Wysyłka: SENDMESSAGE (recipient bez "+", channels ["sms"], sms: { source, ttl, text }) -> data.messageID, data.sms.status.
 // Status: GETMESSAGESTATUS (messageID) -> data.sms.status. Saldo: GETBALANCE. Nadawcy: GETSOURCES.
+// Jeden odbiorca na zapytanie – pule to równoległe zapytania (limit SMS_RATE_PER_SECOND).
 import type { DlrStatus, GatewayStatus, SendResult, SmsProvider } from './provider';
 
 const TIMEOUT_MS = 15_000;
@@ -116,6 +117,7 @@ export function createSmsFlyProvider(opts: {
           error: ERRORS[code] ?? `SMS-fly: ${code}${body?.error?.description ? ` (${body.error.description})` : ''}`,
           retryable: transient,
           failover: !RECIPIENT_ERRORS.has(code),
+          badRecipient: code === 'INVRECIPIENT' || code === 'INVROUTE',
         };
       }
 
@@ -133,6 +135,14 @@ export function createSmsFlyProvider(opts: {
       }
       const cost = sms?.cost !== undefined ? Number(sms.cost) : null;
       return { ok: true, messageId: body.data.messageID, status, parts: null, points: Number.isFinite(cost) ? cost : null };
+    },
+
+    async senders() {
+      try {
+        return await smsSources();
+      } catch {
+        return null;
+      }
     },
 
     async checkStatus(messageId: string): Promise<DlrStatus | null> {

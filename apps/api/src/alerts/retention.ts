@@ -23,3 +23,18 @@ export async function purgeOldAlerts(log?: FastifyBaseLogger): Promise<number> {
   if (alerts.length) log?.info(`Retencja: zanonimizowano ${alerts.length} alertów`);
   return alerts.length;
 }
+
+/** To samo dla wiadomości do grup: po ALERT_RETENTION_DAYS od wysłania zostają tylko liczby i statusy. */
+export async function purgeOldNotices(log?: FastifyBaseLogger): Promise<number> {
+  const cutoff = new Date(Date.now() - env.ALERT_RETENTION_DAYS * 86_400_000);
+  const notices = await prisma.notice.findMany({ where: { purgedAt: null, createdAt: { lt: cutoff } }, select: { id: true } });
+  for (const { id } of notices) {
+    await prisma.$transaction([
+      prisma.smsDelivery.updateMany({ where: { noticeId: id }, data: { body: '', phoneEnc: '', guardianName: null } }),
+      prisma.notice.update({ where: { id }, data: { body: '', purgedAt: new Date() } }),
+    ]);
+    await writeAudit({ action: 'notice.purged', entity: 'notice', entityId: id, details: { retentionDays: env.ALERT_RETENTION_DAYS } });
+  }
+  if (notices.length) log?.info(`Retencja: zanonimizowano ${notices.length} wiadomości`);
+  return notices.length;
+}

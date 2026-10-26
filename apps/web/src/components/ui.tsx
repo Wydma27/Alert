@@ -6,6 +6,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 
 type Variant = 'primary' | 'danger' | 'secondary' | 'ghost';
@@ -76,6 +77,10 @@ const inputClass =
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClass} ${props.className ?? ''}`} />;
+}
+
+export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...props} className={`${inputClass} ${props.className ?? ''}`} />;
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import type { DashboardDto } from '@alert/shared';
 import { Card, Loading, Notice, PageHeader } from '../components/ui';
@@ -6,6 +7,7 @@ import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { plural } from '../lib/format';
 import { formatTime, useActiveAlert } from '../lib/hooks';
+import { CHANGE_EVENT, getMeta, offlineSupported, type OfflineMeta } from '../lib/offline';
 
 function Stat({ label, value, to }: { label: string; value: number; to?: string }) {
   const body = (
@@ -93,16 +95,27 @@ export function DashboardPage() {
         </div>
       )}
 
+      <Link
+        to="/wiadomosci/nowa"
+        className="mb-6 block rounded-xl border-4 border-ink bg-surface px-6 py-5 text-center hover:bg-neutral-100"
+      >
+        <span className="block text-2xl font-black">WYŚLIJ SMS</span>
+        <span className="block font-semibold text-muted">nauczyciele · uczniowie · rodzice – całe grupy, klasy albo wybrane osoby</span>
+      </Link>
+
       {isLoading && <Loading />}
       {error && <Notice tone="error">{errorMessage(error)}</Notice>}
       {data && (
         <div className="flex flex-col gap-4">
           <Readiness data={data} hasPin={me!.user.hasLaunchPin} />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <OfflineReminder />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Stat label="nauczycieli" value={data.counts.teachers} to="/nauczyciele" />
+            <Stat label={`uczniów (z własnym numerem: ${data.counts.studentsWithOwnPhone})`} value={data.counts.students} to="/uczniowie" />
+            <Stat label="rodziców (numerów)" value={data.counts.guardians} to="/uczniowie" />
             <Stat label="klas" value={data.counts.classes} to="/klasy" />
-            <Stat label="uczniów" value={data.counts.students} to="/uczniowie" />
-            <Stat label="numerów opiekunów" value={data.counts.guardians} />
             <Stat label="punktów zbiórki" value={data.counts.assemblyPoints} to="/punkty-zbiorki" />
+            <Stat label="wysłanych wiadomości" value={data.counts.notices} to="/wiadomosci" />
           </div>
         </div>
       )}
@@ -140,6 +153,35 @@ function Readiness({ data, hasPin }: { data: DashboardDto; hasPin: boolean }) {
           </li>
         ))}
       </ul>
+    </Notice>
+  );
+}
+
+/** Kopia kontaktów w tym urządzeniu – do wysyłki, gdy serwer nie działa. */
+function OfflineReminder() {
+  const { me } = useAuth();
+  const [meta, setMeta] = useState<OfflineMeta | null | undefined>(undefined);
+  useEffect(() => {
+    const load = () => void getMeta().then(setMeta);
+    load();
+    window.addEventListener(CHANGE_EVENT, load);
+    return () => window.removeEventListener(CHANGE_EVENT, load);
+  }, []);
+  if (!offlineSupported() || meta === undefined) return null;
+  if (meta && meta.userId === me?.user.id && meta.syncedAt) {
+    return (
+      <p className="text-muted">
+        Kopia kontaktów w tym urządzeniu: {new Date(meta.syncedAt).toLocaleString('pl-PL')} ({meta.people}).{' '}
+        <Link to="/awaryjny" className="underline">
+          Tryb awaryjny
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <Notice tone="info">
+      Włącz <Link to="/konto" className="underline">kopię kontaktów w tym urządzeniu</Link> – SMS-y wyślesz wtedy nawet przy awarii serwera lub bazy
+      danych.
     </Notice>
   );
 }

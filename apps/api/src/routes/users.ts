@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ROLES, type UserDto } from '@alert/shared';
 import { prisma } from '../db';
+import { forgetSessions } from '../emergency/snapshot';
 import { audit } from '../lib/audit';
 import { HttpError, idParam, parseOr400 } from '../lib/http';
 import { hashSecret, validatePasswordStrength } from '../lib/password';
@@ -78,6 +79,7 @@ export async function userRoutes(app: FastifyInstance) {
     if (data.isActive === false || (data.role && data.role !== user.role)) {
       // Zmiana roli lub dezaktywacja: wyloguj ze wszystkich urządzeń.
       await prisma.session.deleteMany({ where: { userId: id } });
+      forgetSessions({ userId: id });
     }
     await audit(req, {
       action: 'user.update',
@@ -96,6 +98,7 @@ export async function userRoutes(app: FastifyInstance) {
       data: { passwordHash: await hashSecret(password), failedLogins: 0, lockedUntil: null },
     });
     await prisma.session.deleteMany({ where: { userId: id } });
+    forgetSessions({ userId: id });
     await audit(req, { action: 'user.password.reset', entity: 'user', entityId: id });
     return toDto(updated);
   });
@@ -111,6 +114,7 @@ export async function userRoutes(app: FastifyInstance) {
         data: { totpSecretEnc: null, totpPendingEnc: null, totpLastStep: null },
       });
     });
+    forgetSessions({ userId: id });
     await audit(req, { action: 'user.2fa.reset', entity: 'user', entityId: id });
     return toDto(updated);
   });

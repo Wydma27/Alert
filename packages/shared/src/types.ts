@@ -59,10 +59,14 @@ export interface StudentListItemDto {
   externalId: string | null;
   guardianCount: number;
   alertableGuardianCount: number;
+  /** Uczeń ma własny numer (grupa "Uczniowie"). */
+  hasOwnPhone: boolean;
 }
 
 export interface StudentDetailDto extends StudentListItemDto {
   guardians: GuardianLinkDto[];
+  /** Własny numer ucznia (maskowany). */
+  phoneMasked: string | null;
 }
 
 export interface UserDto {
@@ -97,6 +101,9 @@ export interface DashboardDto {
     assemblyPoints: number;
     studentsWithoutPhone: number;
     classesWithoutAssemblyPoint: number;
+    teachers: number;
+    studentsWithOwnPhone: number;
+    notices: number;
   };
 }
 
@@ -108,6 +115,7 @@ export const IMPORT_FIELDS = [
   'lastName',
   'fullName',
   'className',
+  'studentPhone',
   'guardian1Name',
   'guardian1Phone',
   'guardian2Name',
@@ -123,6 +131,7 @@ export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
   lastName: 'Nazwisko ucznia',
   fullName: 'Imię i nazwisko w jednej kolumnie',
   className: 'Klasa',
+  studentPhone: 'Telefon ucznia (własny)',
   guardian1Name: 'Opiekun 1 – imię i nazwisko',
   guardian1Phone: 'Opiekun 1 – telefon',
   guardian2Name: 'Opiekun 2 – imię i nazwisko',
@@ -131,13 +140,29 @@ export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
   guardian3Phone: 'Opiekun 3 – telefon',
 };
 
+export const TEACHER_IMPORT_FIELDS = ['externalId', 'firstName', 'lastName', 'fullName', 'position', 'phone'] as const;
+export type TeacherImportField = (typeof TEACHER_IMPORT_FIELDS)[number];
+
+export const TEACHER_IMPORT_FIELD_LABELS: Record<TeacherImportField, string> = {
+  externalId: 'Identyfikator (opcjonalnie)',
+  firstName: 'Imię',
+  lastName: 'Nazwisko',
+  fullName: 'Imię i nazwisko w jednej kolumnie',
+  position: 'Funkcja / przedmiot (opcjonalnie)',
+  phone: 'Telefon',
+};
+
+/** Co importujemy: uczniów z rodzicami albo nauczycieli. */
+export type ImportType = 'students' | 'teachers';
+
 /** Mapowanie: pole aplikacji -> indeks kolumny w pliku. */
-export type ImportMapping = Partial<Record<ImportField, number>>;
+export type ImportMapping = Partial<Record<ImportField | TeacherImportField, number>>;
 
 export type FullNameOrder = 'LAST_FIRST' | 'FIRST_LAST';
 
 export interface ImportUploadResponse {
   importId: string;
+  type: ImportType;
   filename: string;
   headers: string[];
   sampleRows: string[][];
@@ -153,6 +178,8 @@ export interface ImportRowIssue {
 }
 
 export interface ImportValidationResponse {
+  type: ImportType;
+  /** Uczniowie albo nauczyciele w pliku (po scaleniu wierszy). */
   studentsInFile: number;
   toCreate: number;
   toUpdate: number;
@@ -161,6 +188,8 @@ export interface ImportValidationResponse {
   newClasses: string[];
   guardiansInFile: number;
   studentsWithoutPhone: number;
+  /** Uczniowie z własnym numerem w pliku. */
+  studentPhonesInFile: number;
   issues: ImportRowIssue[];
 }
 

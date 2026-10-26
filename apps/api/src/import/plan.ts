@@ -1,6 +1,6 @@
 // Porównanie pliku z bazą (podgląd zmian) i zapis w jednej transakcji.
 import type { Prisma } from '@prisma/client';
-import { prisma } from '../db';
+import { CTX, fieldCrypto, prisma } from '../db';
 import { deleteOrphanGuardians, findOrCreateGuardian, phoneHmac } from '../lib/guardians';
 import { compareClassNames } from '../lib/names';
 import { studentNameKey, type ImportedStudent } from './build';
@@ -19,6 +19,18 @@ export interface ImportPlan {
   newClasses: string[];
 }
 
+function studentPhoneHmac(e164: string) {
+  return fieldCrypto.blindIndex(e164, CTX.studentPhone);
+}
+
+/** Pola własnego telefonu ucznia do zapisu (undefined = bez zmian). */
+function studentPhoneData(phone: string | null | undefined) {
+  if (phone === undefined) return {};
+  return phone
+    ? { phoneEnc: fieldCrypto.encrypt(phone, CTX.studentPhone), phoneHmac: studentPhoneHmac(phone) }
+    : { phoneEnc: null, phoneHmac: null };
+}
+
 function guardianSignature(pairs: { hmac: string; priority: number }[]) {
   return pairs
     .map((p) => `${p.priority}:${p.hmac}`)
@@ -31,6 +43,7 @@ function isChanged(existing: ExistingStudent, incoming: ImportedStudent): boolea
   if (existing.lastName !== incoming.lastName) return true;
   if (existing.schoolClass.name !== incoming.className) return true;
   if (incoming.externalId && existing.externalId !== incoming.externalId) return true;
+  if (incoming.phone !== undefined && existing.phoneHmac !== (incoming.phone ? studentPhoneHmac(incoming.phone) : null)) return true;
   const before = guardianSignature(existing.guardians.map((g) => ({ hmac: g.guardian.phoneHmac, priority: g.priority })));
   const after = guardianSignature(incoming.guardians.map((g) => ({ hmac: phoneHmac(g.e164), priority: g.priority })));
   return before !== after;
@@ -105,6 +118,7 @@ export async function commitPlan(plan: ImportPlan) {
             lastName: s.lastName,
             externalId: s.externalId,
             classId: classId.get(s.className)!,
+            ...studentPhoneData(s.phone),
             guardians: {
               create: s.guardians.map((g) => ({ guardianId: guardianIdByPhone.get(g.e164)!, priority: g.priority })),
             },
@@ -121,6 +135,7 @@ export async function commitPlan(plan: ImportPlan) {
             lastName: incoming.lastName,
             externalId: incoming.externalId ?? existing.externalId,
             classId: classId.get(incoming.className)!,
+            ...studentPhoneData(incoming.phone),
           },
         });
         const wanted = new Map(incoming.guardians.map((g) => [guardianIdByPhone.get(g.e164)!, g.priority]));

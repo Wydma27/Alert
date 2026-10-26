@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ROLE_LABELS, type Role } from '@alert/shared';
 import { useAuth } from '../lib/auth';
-import { formatTime, useActiveAlert } from '../lib/hooks';
+import { formatTime, useActiveAlert, useServerHealth } from '../lib/hooks';
 
 const NAV: { to: string; label: string; roles: Role[] }[] = [
   { to: '/', label: 'Pulpit', roles: ['ADMIN', 'DYREKCJA', 'NAUCZYCIEL'] },
+  { to: '/wiadomosci/nowa', label: 'Wyślij SMS', roles: ['ADMIN', 'DYREKCJA'] },
+  { to: '/wiadomosci', label: 'Wiadomości i raporty', roles: ['ADMIN', 'DYREKCJA'] },
   { to: '/obecnosc', label: 'Lista obecności', roles: ['ADMIN', 'DYREKCJA', 'NAUCZYCIEL'] },
   { to: '/alerty', label: 'Historia alertów', roles: ['ADMIN', 'DYREKCJA'] },
-  { to: '/uczniowie', label: 'Uczniowie', roles: ['ADMIN', 'DYREKCJA'] },
+  { to: '/nauczyciele', label: 'Nauczyciele', roles: ['ADMIN', 'DYREKCJA'] },
+  { to: '/uczniowie', label: 'Uczniowie i rodzice', roles: ['ADMIN', 'DYREKCJA'] },
   { to: '/klasy', label: 'Klasy', roles: ['ADMIN', 'DYREKCJA'] },
   { to: '/punkty-zbiorki', label: 'Punkty zbiórki', roles: ['ADMIN', 'DYREKCJA'] },
   { to: '/szablony', label: 'Szablony SMS', roles: ['ADMIN', 'DYREKCJA'] },
@@ -17,6 +20,7 @@ const NAV: { to: string; label: string; roles: Role[] }[] = [
   { to: '/szkola', label: 'Dane szkoły', roles: ['ADMIN'] },
   { to: '/uzytkownicy', label: 'Użytkownicy', roles: ['ADMIN'] },
   { to: '/dziennik', label: 'Dziennik zdarzeń', roles: ['ADMIN', 'DYREKCJA'] },
+  { to: '/awaryjny', label: 'Tryb awaryjny', roles: ['ADMIN', 'DYREKCJA'] },
   { to: '/konto', label: 'Moje konto', roles: ['ADMIN', 'DYREKCJA', 'NAUCZYCIEL'] },
 ];
 
@@ -27,7 +31,10 @@ export function Layout() {
   const role = me!.user.role;
   const items = NAV.filter((n) => n.roles.includes(role));
   const active = useActiveAlert();
+  const health = useServerHealth();
   const commander = role === 'ADMIN' || role === 'DYREKCJA';
+  const dbDown = health.data?.db === false;
+  const serverDown = health.isError;
 
   const nav = (
     <nav aria-label="Menu główne" className="flex flex-col gap-1">
@@ -35,7 +42,7 @@ export function Layout() {
         <NavLink
           key={item.to}
           to={item.to}
-          end={item.to === '/'}
+          end={item.to === '/' || item.to === '/wiadomosci'}
           onClick={() => setMenuOpen(false)}
           className={({ isActive }) =>
             `flex min-h-12 items-center rounded-lg px-3 font-semibold ${isActive ? 'bg-ink text-white' : 'text-ink hover:bg-neutral-200'}`
@@ -73,6 +80,17 @@ export function Layout() {
           {menuOpen ? 'Zamknij' : 'Menu'}
         </button>
       </header>
+
+      {(dbDown || serverDown) && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 bg-alarm-dark px-4 py-2 font-bold text-white">
+          <span>{serverDown ? 'Brak połączenia z serwerem.' : 'Baza danych nie odpowiada.'} Dane mogą się nie zapisywać.</span>
+          {commander && (
+            <NavLink to="/awaryjny" className="rounded-lg border-2 border-white px-3 py-1">
+              Tryb awaryjny – wyślij SMS
+            </NavLink>
+          )}
+        </div>
+      )}
 
       {active.data && (
         <div

@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
 import type { Role } from '@alert/shared';
 import { Layout } from './components/Layout';
 import { Loading } from './components/ui';
 import { useAuth } from './lib/auth';
+import { useOfflineAutoSync } from './lib/offline';
 import { AccountPage } from './pages/Account';
 import { AlertHistoryPage } from './pages/AlertHistory';
 import { AssemblyPointsPage } from './pages/AssemblyPoints';
@@ -12,12 +13,17 @@ import { AuditLogPage } from './pages/AuditLog';
 import { ClassesPage } from './pages/Classes';
 import { CommandCenterPage } from './pages/CommandCenter';
 import { DashboardPage } from './pages/Dashboard';
+import { EmergencyPage } from './pages/Emergency';
 import { ImportPage } from './pages/Import';
 import { LoginPage } from './pages/Login';
 import { NewAlertPage } from './pages/NewAlert';
+import { NewNoticePage } from './pages/NewNotice';
+import { NoticeDetailPage } from './pages/NoticeDetail';
+import { NoticesPage } from './pages/Notices';
 import { SchoolPage } from './pages/School';
 import { StudentDetailPage } from './pages/StudentDetail';
 import { StudentsPage } from './pages/Students';
+import { TeachersPage } from './pages/Teachers';
 import { TemplatesPage } from './pages/Templates';
 import { TestSmsPage } from './pages/TestSms';
 import { TwoFactorPage } from './pages/TwoFactor';
@@ -30,6 +36,10 @@ function RoleGate({ roles, children }: { roles: Role[]; children: ReactNode }) {
 
 export function App() {
   const { me, loading } = useAuth();
+  const location = useLocation();
+  useOfflineAutoSync(me);
+  // Tryb awaryjny działa bez logowania i bez serwera (kopia kontaktów w urządzeniu, odblokowana PIN-em).
+  if (location.pathname === '/awaryjny') return <EmergencyPage />;
   if (loading) return <Loading />;
 
   // Niezalogowany albo w trakcie logowania (2FA) – tylko ekrany logowania.
@@ -55,6 +65,10 @@ export function App() {
         <Route path="alarm/nowy" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><NewAlertPage /></RoleGate>} />
         <Route path="alarm/:id" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><CommandCenterPage /></RoleGate>} />
         <Route path="alerty" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><AlertHistoryPage /></RoleGate>} />
+        <Route path="wiadomosci" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><NoticesPage /></RoleGate>} />
+        <Route path="wiadomosci/nowa" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><NewNoticePage /></RoleGate>} />
+        <Route path="wiadomosci/:id" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><NoticeDetailPage /></RoleGate>} />
+        <Route path="nauczyciele" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><TeachersPage /></RoleGate>} />
         <Route path="obecnosc" element={<AttendancePage />} />
         <Route path="obecnosc/:alertClassId" element={<AttendanceClassPage />} />
         <Route path="szablony" element={<RoleGate roles={['ADMIN', 'DYREKCJA']}><TemplatesPage /></RoleGate>} />

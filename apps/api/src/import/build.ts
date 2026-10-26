@@ -20,6 +20,8 @@ export interface ImportedStudent {
   lastName: string;
   className: string;
   guardians: ImportedGuardian[];
+  /** Własny numer ucznia; undefined = kolumna nieprzypisana (numer w bazie bez zmian), null = pusty. */
+  phone: string | null | undefined;
   rows: number[];
 }
 
@@ -44,8 +46,8 @@ export function validateMapping(mapping: ImportMapping): string | null {
   const hasNames = (mapping.firstName !== undefined && mapping.lastName !== undefined) || mapping.fullName !== undefined;
   if (!hasNames) return 'Wskaż kolumny z imieniem i nazwiskiem ucznia (osobno albo w jednej kolumnie).';
   if (mapping.className === undefined) return 'Wskaż kolumnę z klasą.';
-  const hasPhone = [1, 2, 3].some((n) => mapping[`guardian${n}Phone` as ImportField] !== undefined);
-  if (!hasPhone) return 'Wskaż co najmniej jedną kolumnę z telefonem opiekuna.';
+  const hasPhone = [1, 2, 3].some((n) => mapping[`guardian${n}Phone` as ImportField] !== undefined) || mapping.studentPhone !== undefined;
+  if (!hasPhone) return 'Wskaż co najmniej jedną kolumnę z telefonem (opiekuna albo ucznia).';
   const used = Object.values(mapping).filter((v) => v !== undefined);
   if (new Set(used).size !== used.length) return 'Ta sama kolumna jest przypisana do dwóch pól.';
   return null;
@@ -104,15 +106,28 @@ export function buildStudents(table: Table, mapping: ImportMapping, order: FullN
       guardians.push({ name: rawName ? normalizePersonName(rawName) : null, e164: valid.e164, priority: n });
     }
 
+    let phone: string | null | undefined = undefined;
+    if (mapping.studentPhone !== undefined) {
+      const raw = get('studentPhone');
+      phone = null;
+      if (raw) {
+        const first = raw.split(/[,;/\n]/).map((x) => x.trim()).find(Boolean) ?? '';
+        const result = normalizePhone(first);
+        if (result.ok) phone = result.e164;
+        else issues.push({ row: rowNo, level: 'warning', message: `Telefon ucznia: ${result.error} – pominięty.` });
+      }
+    }
+
     const externalId = get('externalId') || null;
     const nameKey = studentNameKey(lastName, firstName, className);
     const key = externalId ? `ext:${externalId}` : nameKey;
     const existing = byKey.get(key);
 
     if (!existing) {
-      byKey.set(key, { key, nameKey, externalId, firstName, lastName, className, guardians, rows: [rowNo] });
+      byKey.set(key, { key, nameKey, externalId, firstName, lastName, className, guardians, phone, rows: [rowNo] });
       return;
     }
+    if (existing.phone == null && phone) existing.phone = phone;
 
     // Kolejny wiersz tego samego ucznia: dokładamy opiekunów.
     existing.rows.push(rowNo);
@@ -135,7 +150,7 @@ export function buildStudents(table: Table, mapping: ImportMapping, order: FullN
 
   const students = [...byKey.values()];
   for (const s of students) {
-    if (s.guardians.length === 0) {
+    if (s.guardians.length === 0 && mapping.studentPhone === undefined) {
       issues.push({
         row: s.rows[0]!,
         level: 'warning',

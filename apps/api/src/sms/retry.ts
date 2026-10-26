@@ -19,3 +19,14 @@ export function createRateLimiter(perSecond: number, now: () => number = Date.no
     if (at > t) await new Promise((r) => setTimeout(r, at - t));
   };
 }
+
+/** Pula: najwyżej `concurrency` zadań naraz, wyniki w kolejności wejścia. */
+export async function runPool<T, R>(items: readonly T[], concurrency: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, async () => {
+    for (let i = next++; i < items.length; i = next++) results[i] = await fn(items[i]!, i);
+  });
+  await Promise.all(workers);
+  return results;
+}

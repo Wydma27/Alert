@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ROLE_LABELS, SENDER_ROLES } from '@alert/shared';
 import { TotpEnrollment } from '../components/TotpEnrollment';
 import { Button, Card, Field, Notice, PageHeader, TextInput } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { formatDateTime } from '../lib/format';
+import { CHANGE_EVENT, disableOffline, enableOffline, getMeta, offlineSupported, syncOffline, type OfflineMeta } from '../lib/offline';
 
 function useFormState() {
   const [busy, setBusy] = useState(false);
@@ -25,6 +27,7 @@ function useFormState() {
 }
 
 function PasswordForm() {
+  const { me } = useAuth();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -38,6 +41,11 @@ function PasswordForm() {
       setCurrent('');
       setNext('');
       setRepeat('');
+      // Kopia kontaktów w tym urządzeniu była zabezpieczona starym hasłem – zabezpieczamy ją nowym.
+      const meta = await getMeta().catch(() => null);
+      if (meta?.userId === me!.user.id && (await enableOffline(next, me!.user).catch(() => null))) {
+        return 'Hasło zmienione. Inne urządzenia zostały wylogowane. Kopia kontaktów w tym urządzeniu jest zabezpieczona nowym hasłem.';
+      }
       return 'Hasło zmienione. Inne urządzenia zostały wylogowane.';
     });
   }
@@ -180,9 +188,97 @@ export function AccountPage() {
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-2">
         {isSender && <PinForm hasPin={user.hasLaunchPin} />}
+        {isSender && <OfflineCopyCard />}
         <TwoFactorCard enabled={user.totpEnabled} />
         <PasswordForm />
       </div>
     </>
+  );
+}
+
+/** Kopia kontaktów w tym urządzeniu (tryb awaryjny bez serwera), szyfrowana PIN-em alarmowym. */
+function OfflineCopyCard() {
+  const { me } = useAuth();
+  const [meta, setMeta] = useState<OfflineMeta | null | undefined>(undefined);
+  const [password, setPassword] = useState('');
+  const form = useFormState();
+  useEffect(() => {
+    const load = () => void getMeta().then(setMeta);
+    load();
+    window.addEventListener(CHANGE_EVENT, load);
+    return () => window.removeEventListener(CHANGE_EVENT, load);
+  }, []);
+
+  const mine = meta && meta.userId === me!.user.id;
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Kopia kontaktów w tym urządzeniu</h2>
+      <p className="mb-3 text-muted">
+        Gdy serwer lub baza danych nie działają, w <strong>Trybie awaryjnym</strong> otworzysz kopię hasłem do konta i wyślesz SMS z telefonu albo skopiujesz numery
+        do panelu bramki. Kopia jest zaszyfrowana, odświeża się sama co 15 minut, a każde pobranie trafia do dziennika zdarzeń.
+      </p>
+      {!offlineSupported() ? (
+        <Notice tone="warning">Ta przeglądarka nie pozwala na zaszyfrowaną kopię (wymagany HTTPS – działa po wdrożeniu na serwer albo na localhost).</Notice>
+      ) : meta === undefined ? null : (
+        <div className="flex flex-col gap-3">
+          {form.error && <Notice tone="error">{form.error}</Notice>}
+          {form.success && <Notice tone="success">{form.success}</Notice>}
+          {meta && !mine && <Notice tone="warning">Na tym urządzeniu jest kopia innego użytkownika ({meta.userName}). Włączenie jej zastąpi.</Notice>}
+          {mine ? (
+            <>
+              <p>
+                Włączona · ostatnia synchronizacja: <strong>{meta.syncedAt ? formatDateTime(meta.syncedAt) : '—'}</strong> · {meta.people} kontaktów
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  busy={form.busy}
+                  onClick={() =>
+                    void form.run(async () => {
+                      await syncOffline(me!.user.id);
+                      return 'Kopia odświeżona.';
+                    })
+                  }
+                >
+                  Synchronizuj teraz
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    void form.run(async () => {
+                      await disableOffline();
+                      return 'Kopia usunięta z tego urządzenia.';
+                    })
+                  }
+                >
+                  Usuń kopię z tego urządzenia
+                </Button>
+              </div>
+            </>
+          ) : (
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void form.run(async () => {
+                  await enableOffline(password, me!.user);
+                  setPassword('');
+                  return 'Kopia włączona i pobrana.';
+                });
+              }}
+            >
+              <Field label="Hasło do konta" hint="Tym hasłem otworzysz kopię w trybie awaryjnym (także bez internetu).">
+                {(id) => (
+                  <TextInput id={id} type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                )}
+              </Field>
+              <Button type="submit" busy={form.busy} disabled={!password} className="self-start">
+                Włącz kopię w tym urządzeniu
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

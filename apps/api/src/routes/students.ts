@@ -13,9 +13,13 @@ import {
 } from '../lib/guardians';
 import { HttpError, idParam, parseOr400 } from '../lib/http';
 import { compareClassNames, normalizePersonName } from '../lib/names';
-import { formatPhone, normalizePhone } from '../lib/phone';
+import { formatPhone, maskPhone, normalizePhone } from '../lib/phone';
 import { CTX, fieldCrypto } from '../db';
 import { requireRole } from '../auth/session';
+
+export function studentPhoneHmac(e164: string): string {
+  return fieldCrypto.blindIndex(e164, CTX.studentPhone);
+}
 
 const studentSchema = z.object({
   classId: z.number().int().positive(),
@@ -66,12 +70,14 @@ function toListItem(s: StudentWithRelations): StudentListItemDto {
     externalId: s.externalId,
     guardianCount: s.guardians.length,
     alertableGuardianCount: s.guardians.filter((g) => g.receivesAlerts).length,
+    hasOwnPhone: Boolean(s.phoneEnc),
   };
 }
 
 function toDetail(s: StudentWithRelations): StudentDetailDto {
   return {
     ...toListItem(s),
+    phoneMasked: s.phoneEnc ? maskPhone(fieldCrypto.decrypt(s.phoneEnc, CTX.studentPhone)) : null,
     guardians: s.guardians.map((link) => ({
       guardianId: link.guardianId,
       displayName: link.guardian.displayName,
@@ -155,6 +161,29 @@ export async function studentRoutes(app: FastifyInstance) {
       return removed;
     });
     return { ok: true, deletedGuardians: guardians };
+  });
+
+  // --- Własny telefon ucznia (grupa "Uczniowie") ---
+
+  app.put('/students/:id/phone', canEdit, async (req) => {
+    const id = idParam(req.params);
+    const { phone } = parseOr400(z.object({ phone: phoneField.nullable() }), req.body);
+    await prisma.student.update({
+      where: { id },
+      data: phone
+        ? { phoneEnc: fieldCrypto.encrypt(phone, CTX.studentPhone), phoneHmac: studentPhoneHmac(phone) }
+        : { phoneEnc: null, phoneHmac: null },
+    });
+    await audit(req, { action: phone ? 'student.phone.set' : 'student.phone.remove', entity: 'student', entityId: id });
+    return toDetail(await loadStudent(id));
+  });
+
+  app.get('/students/:id/phone', canView, async (req) => {
+    const id = idParam(req.params);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.phoneEnc) throw new HttpError(404, 'Uczeń nie ma własnego numeru.');
+    await audit(req, { action: 'student.phone.reveal', entity: 'student', entityId: id });
+    return { phone: formatPhone(fieldCrypto.decrypt(student.phoneEnc, CTX.studentPhone)) };
   });
 
   // --- Opiekunowie ucznia ---

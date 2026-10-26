@@ -145,7 +145,7 @@ export async function alertRoutes(app: FastifyInstance) {
       const phone = deliveryPhone(d.phoneEnc);
       return {
         id: d.id,
-        messageKind: d.message.kind,
+        messageKind: d.message?.kind ?? 'START',
         studentName: d.alertStudent ? `${d.alertStudent.firstName} ${d.alertStudent.lastName}` : null,
         className: d.alertStudent?.alertClass.className ?? null,
         guardianName: d.guardianName,

@@ -37,7 +37,7 @@ export async function schoolRoutes(app: FastifyInstance) {
   });
 
   app.get('/dashboard', { preHandler: requireRole('ADMIN', 'DYREKCJA') }, async (): Promise<DashboardDto> => {
-    const [school, classes, students, guardians, assemblyPoints, withoutPhone, classesWithoutPoint] = await Promise.all([
+    const [school, classes, students, guardians, assemblyPoints, withoutPhone, classesWithoutPoint, teachers, ownPhones, notices] = await Promise.all([
       prisma.school.findUnique({ where: { id: 1 } }),
       prisma.schoolClass.count(),
       prisma.student.count(),
@@ -45,6 +45,9 @@ export async function schoolRoutes(app: FastifyInstance) {
       prisma.assemblyPoint.count({ where: { active: true } }),
       prisma.student.count({ where: { guardians: { none: { receivesAlerts: true } } } }),
       prisma.schoolClass.count({ where: { defaultAssemblyPointId: null } }),
+      prisma.teacher.count(),
+      prisma.student.count({ where: { phoneEnc: { not: null } } }),
+      prisma.notice.count(),
     ]);
     return {
       school: { name: school?.name ?? '', configured: Boolean(school) },
@@ -55,6 +58,9 @@ export async function schoolRoutes(app: FastifyInstance) {
         assemblyPoints,
         studentsWithoutPhone: withoutPhone,
         classesWithoutAssemblyPoint: classesWithoutPoint,
+        teachers,
+        studentsWithOwnPhone: ownPhones,
+        notices,
       },
     };
   });

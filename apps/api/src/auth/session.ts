@@ -4,7 +4,9 @@ import fp from 'fastify-plugin';
 import { randomBytes } from 'node:crypto';
 import type { Role } from '@alert/shared';
 import { prisma } from '../db';
+import { forgetSessions, rememberSession, sessionFromSnapshot } from '../emergency/snapshot';
 import { env } from '../env';
+import { dbHealthy, isDbConnectionError, markDbDown } from '../lib/dbHealth';
 import { HttpError } from '../lib/http';
 import { sha256Hex } from '../lib/password';
 
@@ -47,7 +49,10 @@ export async function startSession(req: FastifyRequest, reply: FastifyReply, use
 }
 
 export async function endSession(req: FastifyRequest, reply: FastifyReply) {
-  if (req.auth) await prisma.session.deleteMany({ where: { id: req.auth.session.id } });
+  if (req.auth) {
+    forgetSessions({ sessionId: req.auth.session.id });
+    await prisma.session.deleteMany({ where: { id: req.auth.session.id } });
+  }
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
@@ -64,7 +69,21 @@ export const sessionPlugin = fp(async (app: FastifyInstance) => {
 
     const token = req.cookies[SESSION_COOKIE];
     if (!token) return;
-    const session = await prisma.session.findUnique({ where: { id: sha256Hex(token) }, include: { user: true } });
+    const sessionId = sha256Hex(token);
+    // Baza nie odpowiada: zalogowani rozpoznawani z kopii awaryjnej (wysyłka SMS działa dalej).
+    if (!dbHealthy()) {
+      req.auth = sessionFromSnapshot(sessionId);
+      return;
+    }
+    let session;
+    try {
+      session = await prisma.session.findUnique({ where: { id: sessionId }, include: { user: true } });
+    } catch (err) {
+      if (!isDbConnectionError(err)) throw err;
+      markDbDown();
+      req.auth = sessionFromSnapshot(sessionId);
+      return;
+    }
     if (!session) return;
     const now = Date.now();
     if (session.expiresAt.getTime() < now || !session.user.isActive) {
@@ -76,11 +95,15 @@ export const sessionPlugin = fp(async (app: FastifyInstance) => {
 
     // Sesja przesuwna: odświeżamy co kilka minut, nie przy każdym żądaniu.
     if (session.mfaOk && now - session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { lastSeenAt: new Date(now), expiresAt: new Date(now + fullSessionTtlMs()) },
-      });
+      const updated = await prisma.session
+        .update({
+          where: { id: session.id },
+          data: { lastSeenAt: new Date(now), expiresAt: new Date(now + fullSessionTtlMs()) },
+        })
+        .catch(() => null); // brak zapisu (np. pełny dysk bazy) nie może zablokować pracy
+      if (updated) sessionOnly.expiresAt = updated.expiresAt;
     }
+    rememberSession(sessionOnly, user);
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import type { MeResponse } from '@alert/shared';
 import { Button, Card, Field, Notice, TextInput } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
@@ -11,7 +12,7 @@ export function AuthShell({ title, children }: { title: string; children: React.
         <div className="text-3xl font-black tracking-tight">
           <span className="text-alarm">ALERT</span> SZKOLNY
         </div>
-        <p className="text-muted">Powiadamianie rodziców o ewakuacji</p>
+        <p className="text-muted">Powiadomienia SMS: nauczyciele, uczniowie, rodzice</p>
       </div>
       <Card className="w-full max-w-md">
         <h1 className="mb-4 text-xl font-bold">{title}</h1>
@@ -67,6 +68,13 @@ export function LoginPage() {
           Zaloguj
         </Button>
       </form>
+      <p className="mt-4 border-t-2 border-line pt-3 text-sm">
+        Serwer lub baza nie działają?{' '}
+        <Link to="/awaryjny" className="font-semibold underline">
+          Tryb awaryjny
+        </Link>{' '}
+        – wysyłka SMS z kopii kontaktów zapisanej w tym urządzeniu.
+      </p>
     </AuthShell>
   );
 }

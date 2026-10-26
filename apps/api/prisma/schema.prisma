@@ -128,6 +128,9 @@ model Student {
   lastName   String   @map("last_name")
   /// Identyfikator z dziennika elektronicznego (bez PESEL – minimalizacja danych).
   externalId String?  @unique @map("external_id")
+  /// Własny telefon ucznia (grupa "Uczniowie"), zaszyfrowany AES-256-GCM.
+  phoneEnc   String?  @map("phone_enc")
+  phoneHmac  String?  @map("phone_hmac")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -136,7 +139,26 @@ model Student {
 
   @@index([classId])
   @@index([lastName, firstName])
+  @@index([phoneHmac])
   @@map("students")
+}
+
+/// Nauczyciele i pracownicy szkoły – grupa odbiorców SMS (niezależna od kont w aplikacji).
+model Teacher {
+  id         Int      @id @default(autoincrement())
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  /// Funkcja, przedmiot lub wychowawstwo, np. "wychowawca 3B", "sekretariat".
+  position   String?
+  /// Numer E.164 zaszyfrowany AES-256-GCM.
+  phoneEnc   String   @map("phone_enc")
+  phoneHmac  String   @unique @map("phone_hmac")
+  externalId String?  @unique @map("external_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([lastName, firstName])
+  @@map("teachers")
 }
 
 model Guardian {
@@ -378,42 +400,87 @@ model AlertMessage {
   @@map("alert_messages")
 }
 
-/// Pojedynczy SMS do jednego odbiorcy. Tabela jest jednocześnie kolejką wysyłki.
+enum RecipientGroup {
+  TEACHERS
+  STUDENTS
+  PARENTS
+}
+
+/// Wiadomość SMS do wybranych osób lub całych grup (nauczyciele, uczniowie, rodzice) – poza alarmem ewakuacyjnym.
+model Notice {
+  id             Int       @id @default(autoincrement())
+  body           String
+  /// Nazwa nadawcy wybrana przy wysyłce; brak = nadawca z "Dane szkoły".
+  sender         String?
+  /// Wybór odbiorców (grupy, klasy, osoby) – do historii.
+  selection      Json
+  /// Opis odbiorców do list, np. "Rodzice: 3A, 3B · Nauczyciele".
+  summary        String
+  recipients     Int
+  parts          Int
+  encoding       String
+  /// Wysłana w trybie awaryjnym (bez bazy danych) i dopisana do historii po powrocie bazy.
+  emergency      Boolean   @default(false)
+  idempotencyKey String    @unique @map("idempotency_key")
+  createdById    Int       @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Ustawiane, gdy dane osobowe zostały usunięte (retencja).
+  purgedAt       DateTime? @map("purged_at") @db.Timestamptz(3)
+
+  deliveries SmsDelivery[]
+
+  @@index([createdAt])
+  @@map("notices")
+}
+
+/// Pojedynczy SMS do jednego odbiorcy. Tabela jest jednocześnie kolejką wysyłki (alerty i wiadomości).
 model SmsDelivery {
-  id                Int            @id @default(autoincrement())
-  alertId           Int            @map("alert_id")
-  messageId         Int            @map("message_id")
-  alertStudentId    Int?           @map("alert_student_id")
-  guardianId        Int?           @map("guardian_id")
-  guardianName      String?        @map("guardian_name")
+  id                Int             @id @default(autoincrement())
+  alertId           Int?            @map("alert_id")
+  messageId         Int?            @map("message_id")
+  noticeId          Int?            @map("notice_id")
+  alertStudentId    Int?            @map("alert_student_id")
+  guardianId        Int?            @map("guardian_id")
+  /// Nazwa odbiorcy (opiekun, nauczyciel, uczeń) z chwili wysyłki.
+  guardianName      String?         @map("guardian_name")
+  /// Odbiorca z książki kontaktów: "p:<opiekun>", "s:<uczeń>", "t:<nauczyciel>" – do raportu błędnych numerów.
+  contactKey        String?         @map("contact_key")
+  audience          RecipientGroup?
   /// Numer testowy zamiast rodzica (tryb ćwiczeń).
-  testNumberId      Int?           @map("test_number_id")
-  phoneEnc          String         @map("phone_enc")
+  testNumberId      Int?            @map("test_number_id")
+  phoneEnc          String          @map("phone_enc")
   body              String
   parts             Int
   encoding          String
+  /// Nadawca tej wiadomości; brak = nadawca z "Dane szkoły".
+  sender            String?
   /// Ćwiczenia: SMS do rodzica tylko symulowany, nic nie wychodzi.
-  simulated         Boolean        @default(false)
-  priority          Int            @default(5)
-  status            DeliveryStatus @default(QUEUED)
+  simulated         Boolean         @default(false)
+  priority          Int             @default(5)
+  status            DeliveryStatus  @default(QUEUED)
+  /// Bramka odrzuciła numer odbiorcy (nieprawidłowy, nieistniejący) – do poprawy w danych.
+  badNumber         Boolean         @default(false) @map("bad_number")
   provider          String?
-  providerMessageId String?        @map("provider_message_id")
-  attempts          Int            @default(0)
-  nextAttemptAt     DateTime       @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
-  lastError         String?        @map("last_error")
-  sentAt            DateTime?      @map("sent_at") @db.Timestamptz(3)
-  deliveredAt       DateTime?      @map("delivered_at") @db.Timestamptz(3)
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  providerMessageId String?         @map("provider_message_id")
+  attempts          Int             @default(0)
+  nextAttemptAt     DateTime        @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lastError         String?         @map("last_error")
+  sentAt            DateTime?       @map("sent_at") @db.Timestamptz(3)
+  deliveredAt       DateTime?       @map("delivered_at") @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  alert        Alert           @relation(fields: [alertId], references: [id], onDelete: Cascade)
-  message      AlertMessage    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  alert        Alert?          @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  message      AlertMessage?   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  notice       Notice?         @relation(fields: [noticeId], references: [id], onDelete: Cascade)
   alertStudent AlertStudent?   @relation(fields: [alertStudentId], references: [id], onDelete: SetNull)
   events       DeliveryEvent[]
 
   @@unique([messageId, alertStudentId, guardianId])
   @@index([status, nextAttemptAt])
   @@index([alertId, status])
+  @@index([noticeId, status])
+  @@index([contactKey])
   @@index([provider, providerMessageId])
   @@map("sms_deliveries")
 }

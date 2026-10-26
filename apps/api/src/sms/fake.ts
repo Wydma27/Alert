@@ -9,6 +9,12 @@ export function createFakeProvider(): SmsProvider {
     async send() {
       return { ok: true, messageId: `fake-${randomUUID()}`, status: 'FAKE', parts: null, points: null };
     },
+    async sendBatch({ to }) {
+      return to.map(() => ({ ok: true as const, messageId: `fake-${randomUUID()}`, status: 'FAKE', parts: null, points: null }));
+    },
+    async senders() {
+      return null;
+    },
     async status() {
       return {
         provider: 'fake',

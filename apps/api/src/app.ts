@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { env, isProduction } from './env';
+import { dbHealthy, isDbConnectionError, isDbWriteFailure, markDbDown } from './lib/dbHealth';
 import { HttpError } from './lib/http';
 import { sessionPlugin } from './auth/session';
 import { alertRoutes } from './routes/alerts';
@@ -17,10 +18,14 @@ import { attendanceRoutes } from './routes/attendance';
 import { auditRoutes } from './routes/audit';
 import { authRoutes } from './routes/auth';
 import { classRoutes } from './routes/classes';
+import { emergencyRoutes } from './routes/emergency';
 import { importRoutes } from './routes/import';
+import { noticeRoutes } from './routes/notices';
+import { offlineRoutes } from './routes/offline';
 import { schoolRoutes } from './routes/school';
 import { smsRoutes } from './routes/sms';
 import { studentRoutes } from './routes/students';
+import { teacherRoutes } from './routes/teachers';
 import { templateRoutes } from './routes/templates';
 import { userRoutes } from './routes/users';
 import { webhookRoutes } from './routes/webhooks';
@@ -55,6 +60,16 @@ export async function buildApp() {
 
   app.setErrorHandler((error: FastifyError | HttpError | Error, req, reply) => {
     if (error instanceof HttpError) return reply.status(error.statusCode).send({ error: error.message });
+    if (isDbConnectionError(error)) {
+      markDbDown();
+      return reply.status(503).send({ error: 'Baza danych nie odpowiada. SMS-y wyślesz w trybie awaryjnym (przycisk na górze strony).', db: false });
+    }
+    if (isDbWriteFailure(error)) {
+      req.log.error(error);
+      return reply
+        .status(503)
+        .send({ error: 'Baza danych nie może zapisać zmian (np. brak miejsca na dysku serwera). SMS-y wyślesz w trybie awaryjnym.', db: false });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') return reply.status(409).send({ error: 'Taki wpis już istnieje.' });
       if (error.code === 'P2025') return reply.status(404).send({ error: 'Nie znaleziono.' });
@@ -71,12 +86,16 @@ export async function buildApp() {
 
   await app.register(
     async (api) => {
-      api.get('/health', async () => ({ ok: true }));
+      api.get('/health', async () => ({ ok: true, db: dbHealthy() }));
       await api.register(authRoutes, { prefix: '/auth' });
       await api.register(schoolRoutes);
       await api.register(assemblyPointRoutes);
       await api.register(classRoutes);
       await api.register(studentRoutes);
+      await api.register(teacherRoutes);
+      await api.register(noticeRoutes);
+      await api.register(emergencyRoutes);
+      await api.register(offlineRoutes);
       await api.register(userRoutes);
       await api.register(auditRoutes);
       await api.register(importRoutes);

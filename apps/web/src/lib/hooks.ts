@@ -39,6 +39,16 @@ export function useAlertEvents(alertId: number | null | undefined, queryKeys: un
   return connected;
 }
 
+/** Czy serwer i baza danych odpowiadają (co 15 s) – baner trybu awaryjnego. */
+export function useServerHealth() {
+  return useQuery({
+    queryKey: ['health'],
+    queryFn: () => api.get<{ ok: boolean; db: boolean }>('/health'),
+    refetchInterval: 15_000,
+    retry: false,
+  });
+}
+
 export function useOnline() {
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   useEffect(() => {
