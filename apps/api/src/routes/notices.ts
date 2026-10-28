@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   DELIVERY_STATUS_LABELS,
@@ -15,6 +15,7 @@ import {
 import { CTX, fieldCrypto, prisma } from '../db';
 import { env } from '../env';
 import { audit } from '../lib/audit';
+import { sendCsv } from '../lib/csv';
 import { loadDirectory, withoutPhones } from '../lib/directory';
 import { HttpError, idParam, parseOr400 } from '../lib/http';
 import { maskPhone } from '../lib/phone';
@@ -30,18 +31,7 @@ function maskedDeliveryPhone(phoneEnc: string): string {
   return phoneEnc ? maskPhone(fieldCrypto.decrypt(phoneEnc, CTX.deliveryPhone)) : '—';
 }
 
-function csvCell(value: unknown): string {
-  const s = value === null || value === undefined ? '' : String(value);
-  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
-function sendCsv(reply: FastifyReply, filename: string, lines: unknown[][]) {
-  const csv = '﻿' + lines.map((l) => l.map(csvCell).join(';')).join('\r\n');
-  return reply
-    .header('Content-Type', 'text/csv; charset=utf-8')
-    .header('Content-Disposition', `attachment; filename="${filename}"`)
-    .send(csv);
-}
 
 const warsaw = (d: Date) => d.toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
 

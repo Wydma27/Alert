@@ -21,7 +21,10 @@ import { generateTotpSecret, otpauthUri, verifyTotp } from '../lib/totp';
 import { currentUser, endSession, requireAnySession, requireLogin, startSession } from '../auth/session';
 import { forgetSessions } from '../emergency/snapshot';
 
-const loginRateLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
+// Limit na adres IP. Logowanie luźniej: w szkolnej sieci Wi-Fi wszyscy nauczyciele mają ten sam adres publiczny,
+// a przed zgadywaniem haseł chroni blokada konta po LOGIN_MAX_FAILED błędach.
+const loginRateLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+const sensitiveRateLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
 function mfaStateFor(user: User, mfaOk: boolean): MfaState {
   if (mfaOk) return 'ok';
@@ -114,7 +117,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // --- Drugi składnik przy logowaniu ---
-  app.post('/2fa/verify', { config: loginRateLimit, preHandler: requireAnySession }, async (req, reply) => {
+  app.post('/2fa/verify', { config: sensitiveRateLimit, preHandler: requireAnySession }, async (req, reply) => {
     const { code } = parseOr400(z.object({ code: z.string().trim().min(6).max(20) }), req.body);
     const user = currentUser(req);
     if (req.auth!.session.mfaOk) return toMe(user, true);
@@ -180,7 +183,7 @@ export async function authRoutes(app: FastifyInstance) {
     return { secret, otpauthUri: uri, qrDataUrl: await QRCode.toDataURL(uri, { margin: 1, width: 240 }) };
   });
 
-  app.post('/2fa/setup/confirm', { config: loginRateLimit, preHandler: requireAnySession }, async (req, reply) => {
+  app.post('/2fa/setup/confirm', { config: sensitiveRateLimit, preHandler: requireAnySession }, async (req, reply) => {
     const { code } = parseOr400(z.object({ code: z.string().trim().min(6).max(10) }), req.body);
     const user = currentUser(req);
     if (!user.totpPendingEnc) throw new HttpError(400, 'Rozpocznij konfigurację od nowa.');
@@ -215,7 +218,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // --- Moje konto ---
-  app.post('/password', { config: loginRateLimit, preHandler: requireLogin }, async (req) => {
+  app.post('/password', { config: sensitiveRateLimit, preHandler: requireLogin }, async (req) => {
     const body = parseOr400(z.object({ currentPassword: z.string().min(1), newPassword: z.string() }), req.body);
     const user = currentUser(req);
     if (!(await verifySecret(user.passwordHash, body.currentPassword))) throw new HttpError(401, 'Obecne hasło jest nieprawidłowe.');
@@ -229,7 +232,7 @@ export async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/pin', { config: loginRateLimit, preHandler: requireLogin }, async (req) => {
+  app.post('/pin', { config: sensitiveRateLimit, preHandler: requireLogin }, async (req) => {
     const body = parseOr400(z.object({ currentPassword: z.string().min(1), pin: z.string() }), req.body);
     const user = currentUser(req);
     if (!SENDER_ROLES.includes(user.role)) throw new HttpError(403, 'PIN alarmowy dotyczy tylko osób uruchamiających alerty.');

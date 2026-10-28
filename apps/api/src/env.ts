@@ -10,6 +10,16 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().default(3000),
   /** 127.0.0.1 = tylko ten komputer; 0.0.0.0 = dostęp z innych urządzeń w sieci (np. test na telefonie). */
   API_HOST: z.string().default('127.0.0.1'),
+  /**
+   * Serwer pośredniczący HTTPS (Caddy/nginx) przed aplikacją: skąd przyjmować prawdziwy adres IP klienta (X-Forwarded-For).
+   * false = brak (aplikacja wystawiona bezpośrednio); loopback = proxy na tym samym serwerze. Bez tego za proxy
+   * wszyscy mają adres 127.0.0.1 – wspólny limit logowań dla całej szkoły i bezużyteczne IP w dzienniku.
+   */
+  TRUST_PROXY: z
+    .string()
+    .trim()
+    .default('false')
+    .transform((v) => (v === 'false' || v === '' ? false : v === 'true' ? true : v)),
   APP_URL: z.string().url().default('http://localhost:5180'),
   APP_NAME: z.string().default('Alert Szkolny'),
   ENCRYPTION_KEYS: z.string().min(1),

@@ -35,7 +35,12 @@ export async function buildApp() {
     logger: {
       level: isProduction ? 'info' : 'debug',
       redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+      serializers: {
+        // Token raportów doręczeń jest w adresie (?token=…) – nie może trafić do logów.
+        req: (req) => ({ method: req.method, url: req.url.replace(/([?&]token=)[^&]*/gi, '$1***'), remoteAddress: req.ip }),
+      },
     },
+    trustProxy: env.TRUST_PROXY,
     bodyLimit: 1024 * 1024,
   });
 

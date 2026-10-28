@@ -12,6 +12,7 @@ import { audit } from '../lib/audit';
 import { onAlertChanged } from '../lib/events';
 import { HttpError, idParam, parseOr400 } from '../lib/http';
 import { compareClassNames } from '../lib/names';
+import { sendCsv } from '../lib/csv';
 import { formatPhone, maskPhone } from '../lib/phone';
 import { kickDeliveryWorker } from '../sms/queue';
 import {
@@ -33,10 +34,6 @@ function deliveryPhone(phoneEnc: string): string | null {
   return fieldCrypto.decrypt(phoneEnc, CTX.deliveryPhone);
 }
 
-function csvCell(value: unknown): string {
-  const s = value === null || value === undefined ? '' : String(value);
-  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 export async function alertRoutes(app: FastifyInstance) {
   const commanders = { preHandler: requireRole('ADMIN', 'DYREKCJA') };
@@ -338,11 +335,7 @@ export async function alertRoutes(app: FastifyInstance) {
       ]),
     ];
     await audit(req, { action: 'alert.report', entity: 'alert', entityId: alertId });
-    const csv = '﻿' + lines.map((l) => l.map(csvCell).join(';')).join('\r\n');
-    return reply
-      .header('Content-Type', 'text/csv; charset=utf-8')
-      .header('Content-Disposition', `attachment; filename="alert-${alertId}.csv"`)
-      .send(csv);
+    return sendCsv(reply, `alert-${alertId}.csv`, lines);
   });
 
 }
