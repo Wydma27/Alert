@@ -25,7 +25,13 @@ async function request<T>(method: string, path: string, body?: unknown, form?: F
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (err) {
+    if (res.ok) throw err;
+    // Odpowiedź błędu nie od aplikacji (np. strona błędu serwera pośredniczącego, gdy aplikacja nie działa).
+  }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('auth:expired'));
     throw new ApiError(res.status, data?.error ?? `Błąd ${res.status}`);
@@ -41,6 +47,11 @@ export const api = {
   delete: <T>(path: string) => request<T>('DELETE', path),
   upload: <T>(path: string, form: FormData) => request<T>('POST', path, undefined, form),
 };
+
+/** Serwer nieosiągalny: brak sieci albo aplikacja za serwerem pośredniczącym nie działa – wtedy dane z pamięci telefonu. */
+export function isUnreachable(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 0 || err.status === 502 || err.status === 504);
+}
 
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Nieznany błąd.';

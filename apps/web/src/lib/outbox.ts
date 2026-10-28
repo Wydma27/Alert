@@ -2,7 +2,7 @@
 // Każda zmiana ma czas z telefonu; serwer odrzuca starsze niż już zapisane (synchronizacja bez konfliktów).
 import { useEffect, useState } from 'react';
 import type { AttendanceValue } from '@alert/shared';
-import { api, ApiError } from './api';
+import { api, ApiError, isUnreachable } from './api';
 
 export interface OutboxItem {
   alertStudentId: number;
@@ -47,7 +47,16 @@ export function pending(): OutboxItem[] {
 
 let flushing: Promise<{ rejected: string[] }> | null = null;
 
-/** Wysyła zaległe zmiany. Przy braku sieci przerywa; odrzucone przez serwer (np. alert zakończony) usuwa. */
+/**
+ * Czy spróbować później: brak sieci, serwer lub baza nie działają (5xx), wygasła sesja (401 – po zalogowaniu wyślemy),
+ * zbyt wiele prób (429). Tylko świadome odrzucenie przez aplikację (np. alert zakończony) usuwa zmianę z kolejki.
+ */
+function retryLater(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return true;
+  return err.status === 0 || err.status >= 500 || err.status === 401 || err.status === 408 || err.status === 429;
+}
+
+/** Wysyła zaległe zmiany. Gdy serwer jest nieosiągalny, przerywa; odrzucone przez serwer (np. alert zakończony) usuwa. */
 export function flush(): Promise<{ rejected: string[] }> {
   flushing ??= (async () => {
     const rejected: string[] = [];
@@ -56,7 +65,7 @@ export function flush(): Promise<{ rejected: string[] }> {
         try {
           await api.post('/attendance/mark', item);
         } catch (err) {
-          if (err instanceof ApiError && err.status === 0) break; // nadal brak sieci
+          if (retryLater(err)) break; // zmiana zostaje w telefonie
           rejected.push(err instanceof Error ? err.message : 'Błąd zapisu');
         }
         const rest = pending().filter((i) => !(i.alertStudentId === item.alertStudentId && i.clientTime === item.clientTime));
@@ -117,7 +126,7 @@ export async function fetchWithCache<T>(key: string, path: string): Promise<T> {
     cacheSet(key, data);
     return data;
   } catch (err) {
-    const cached = err instanceof ApiError && err.status === 0 ? cacheGet<T>(key) : null;
+    const cached = isUnreachable(err) ? cacheGet<T>(key) : null;
     if (cached) return cached;
     throw err;
   }
