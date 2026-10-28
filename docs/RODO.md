@@ -52,7 +52,7 @@ Operatorzy sieci komórkowych doręczają SMS-y jako dostawcy usług telekomunik
 |---|---|---|
 | Kontakty (uczniowie, rodzice, nauczyciele) | dopóki są w szkole | usuwanie ręczne / przy imporcie nowego roku szkolnego – **ustalić procedurę na koniec roku** |
 | Przebieg alertów i wiadomości (nazwiska, numery, treści) | `ALERT_RETENTION_DAYS`, domyślnie **365 dni** od zakończenia | automatyczna anonimizacja – zostają tylko liczby i przebieg |
-| Sesje logowania | 14 dni bez aktywności | automatycznie |
+| Sesje logowania | dyrekcja i administrator: 14 dni bez aktywności; nauczyciele: 365 dni (żeby w dniu alarmu nie trzeba było się logować) | automatycznie; zgubiony telefon – administrator zmienia hasło lub wyłącza konto |
 | Kopie zapasowe bazy | 30 dni (ustawienie `KEEP_DAYS`) | automatycznie (`deploy/backup.sh`) |
 | Logi serwera | wg ustawień systemu (journald) | ustawić limit, np. 30 dni |
 | **Dziennik zdarzeń** | **obecnie bez limitu** | celowo nieusuwalny (ochrona przed zatarciem śladów); **IOD powinien ustalić okres** – wymaga to zmiany w aplikacji |

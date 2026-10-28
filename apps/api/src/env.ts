@@ -26,6 +26,8 @@ const schema = z.object({
   ENCRYPTION_ACTIVE_KEY_ID: z.string().min(1),
   BLIND_INDEX_KEY: base64Key,
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
+  /** Sesja nauczyciela (tylko lista obecności) – długa, żeby w dniu alarmu nie trzeba było się logować. Przeglądarki: max 400 dni. */
+  TEACHER_SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(400).default(365),
   LOGIN_MAX_FAILED: z.coerce.number().int().positive().default(5),
   LOGIN_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
   /** fake = nic nie wychodzi (lokalnie, testy); smsfly / smsapi / serwersms = prawdziwe SMS-y */

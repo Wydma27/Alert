@@ -9,6 +9,7 @@ import { env } from '../env';
 import { dbHealthy, isDbConnectionError, markDbDown } from '../lib/dbHealth';
 import { HttpError } from '../lib/http';
 import { sha256Hex } from '../lib/password';
+import { sessionTtlMs } from './sessionTtl';
 
 export const SESSION_COOKIE = 'sid';
 const MFA_PENDING_TTL_MS = 10 * 60 * 1000;
@@ -21,31 +22,35 @@ declare module 'fastify' {
   }
 }
 
-function fullSessionTtlMs() {
-  return env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+function fullSessionTtlMs(role: Role) {
+  return sessionTtlMs(role, env);
+}
+
+function setSessionCookie(reply: FastifyReply, token: string, expires: Date) {
+  reply.setCookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: secureCookie,
+    path: '/',
+    expires,
+  });
 }
 
 /** Tworzy sesję i ustawia ciasteczko. Token trafia tylko do przeglądarki, w bazie jest jego hash. */
-export async function startSession(req: FastifyRequest, reply: FastifyReply, userId: number, mfaOk: boolean) {
+export async function startSession(req: FastifyRequest, reply: FastifyReply, user: Pick<User, 'id' | 'role'>, mfaOk: boolean) {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + (mfaOk ? fullSessionTtlMs() : MFA_PENDING_TTL_MS));
+  const expiresAt = new Date(Date.now() + (mfaOk ? fullSessionTtlMs(user.role) : MFA_PENDING_TTL_MS));
   await prisma.session.create({
     data: {
       id: sha256Hex(token),
-      userId,
+      userId: user.id,
       mfaOk,
       expiresAt,
       ip: req.ip,
       userAgent: req.headers['user-agent']?.slice(0, 300) ?? null,
     },
   });
-  reply.setCookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: secureCookie,
-    path: '/',
-    expires: expiresAt,
-  });
+  setSessionCookie(reply, token, expiresAt);
 }
 
 export async function endSession(req: FastifyRequest, reply: FastifyReply) {
@@ -59,7 +64,7 @@ export async function endSession(req: FastifyRequest, reply: FastifyReply) {
 export const sessionPlugin = fp(async (app: FastifyInstance) => {
   app.decorateRequest('auth', null);
 
-  app.addHook('onRequest', async (req) => {
+  app.addHook('onRequest', async (req, reply) => {
     // CSRF: zmiany stanu tylko z nagłówkiem, którego obca strona nie może ustawić bez CORS.
     // Uzupełnia SameSite=Strict na ciasteczku sesji.
     // Wyjątek: raporty doręczeń od bramek SMS (chronione osobnym tokenem w adresie).
@@ -93,15 +98,19 @@ export const sessionPlugin = fp(async (app: FastifyInstance) => {
     const { user, ...sessionOnly } = session;
     req.auth = { session: sessionOnly, user };
 
-    // Sesja przesuwna: odświeżamy co kilka minut, nie przy każdym żądaniu.
+    // Sesja przesuwna: odświeżamy co kilka minut, nie przy każdym żądaniu – w bazie i w ciasteczku
+    // (inaczej przeglądarka i tak usunęłaby ciasteczko po czasie liczonym od zalogowania).
     if (session.mfaOk && now - session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
       const updated = await prisma.session
         .update({
           where: { id: session.id },
-          data: { lastSeenAt: new Date(now), expiresAt: new Date(now + fullSessionTtlMs()) },
+          data: { lastSeenAt: new Date(now), expiresAt: new Date(now + fullSessionTtlMs(user.role)) },
         })
         .catch(() => null); // brak zapisu (np. pełny dysk bazy) nie może zablokować pracy
-      if (updated) sessionOnly.expiresAt = updated.expiresAt;
+      if (updated) {
+        sessionOnly.expiresAt = updated.expiresAt;
+        setSessionCookie(reply, token, updated.expiresAt);
+      }
     }
     rememberSession(sessionOnly, user);
   });

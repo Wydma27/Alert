@@ -196,7 +196,9 @@ ani `npm run db:local` (to baza tylko do testów).
    Przed zapisem zobaczysz raport błędnych numerów (można go pobrać jako CSV i poprawić plik).
 5. **Klasy** – domyślny punkt zbiórki dla każdej klasy.
 6. **Użytkownicy** – konta dyrekcji (wysyłają SMS-y i alarm) i nauczycieli (lista obecności). Każdy zmienia hasło,
-   dyrekcja konfiguruje 2FA i **PIN alarmowy** w „Moje konto”.
+   dyrekcja konfiguruje 2FA i **PIN alarmowy** w „Moje konto”. Nauczyciel loguje się **raz na swoim telefonie** –
+   sesja trwa rok od ostatniego użycia (`TEACHER_SESSION_TTL_DAYS`), więc w dniu alarmu nie musi pamiętać hasła.
+   Zgubiony telefon: „Użytkownicy” → nowe hasło albo wyłączenie konta (wylogowuje ze wszystkich urządzeń).
 7. **Kopia kontaktów w urządzeniu** – każda osoba z dyrekcji na swoim telefonie (i komputerze):
    „Moje konto” → „Kopia kontaktów w tym urządzeniu” → hasło do konta. Działa tylko przez HTTPS.
 8. **Szablony SMS** – przeczytaj i dostosuj treści alarmu ewakuacyjnego.
@@ -262,7 +264,8 @@ Wszystkie wysyłki awaryjne trafiają do dziennika zdarzeń (z telefonu – po o
   to na ćwiczeniach; bezpieczniej wkleić numery w panelu bramki SMS.
 - Logowanie w trybie awaryjnym działa tylko dla sesji zalogowanych wcześniej (nowe logowanie wymaga bazy).
 - Brak ostrzeżenia o niskim saldzie bramki na pulpicie – saldo widać w „Test SMS”.
-- Nauczyciel musi być wcześniej zalogowany na telefonie (link logowania SMS-em – planowany po wdrożeniu na serwer).
+- Nauczyciel musi raz zalogować się na telefonie (sesja trwa rok od ostatniego użycia; link logowania SMS-em – planowany
+  po wdrożeniu na serwer). Kto nie otwierał aplikacji ponad rok – zaloguje się ponownie, np. na ćwiczeniach.
 - Statusy doręczeń: SMS-fly – odpytywane automatycznie; SMSAPI i SerwerSMS – wymagają publicznego adresu HTTPS
   (`SMS_CALLBACK_BASE_URL`).
 - Bramki SMSAPI i SerwerSMS są zaimplementowane według dokumentacji, ale nie były testowane na prawdziwych kontach;

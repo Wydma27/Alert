@@ -67,7 +67,7 @@ function lockedMessage(until: Date) {
 /** Po pełnym zalogowaniu wymieniamy token sesji (ochrona przed przejęciem sesji sprzed 2FA). */
 async function upgradeSession(req: FastifyRequest, reply: FastifyReply, user: User) {
   await prisma.session.deleteMany({ where: { id: req.auth!.session.id } });
-  await startSession(req, reply, user.id, true);
+  await startSession(req, reply, user, true);
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -96,7 +96,7 @@ export async function authRoutes(app: FastifyInstance) {
       data: { failedLogins: 0, lockedUntil: null },
     });
     const needsSecondFactor = Boolean(fresh.totpSecretEnc) || requiresTwoFactor(fresh.role);
-    await startSession(req, reply, fresh.id, !needsSecondFactor);
+    await startSession(req, reply, fresh, !needsSecondFactor);
     if (!needsSecondFactor) {
       await prisma.user.update({ where: { id: fresh.id }, data: { lastLoginAt: new Date() } });
       await writeAudit({ action: 'auth.login', userId: fresh.id, ip: req.ip, details: { method: 'password' } });

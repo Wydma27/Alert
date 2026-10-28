@@ -12,7 +12,7 @@
 | Komunikaty | START, UPDATE (zmiana punktu), CANCEL (odwołanie alarmu / powrót do szkoły), CONFIRM (obecność), PICKUP (odbiór – do pozostałych opiekunów). |
 | Rodzeństwo | Osobny SMS na każde dziecko. |
 | Ćwiczenia | Pełny przebieg na prawdziwych danych; SMS-y do rodziców symulowane; prawdziwy przykład na numery testowe; dopisek „CWICZENIA:”. |
-| Nauczyciele | Logowanie hasłem (długa sesja na telefonie). Link jednorazowy SMS-em do listy obecności – **odłożony do wdrożenia na serwer** (wymaga publicznego adresu). |
+| Nauczyciele | Logowanie hasłem raz na telefonie – sesja przesuwna 365 dni (`TEACHER_SESSION_TTL_DAYS`; dyrekcja 14 dni), odświeżana w bazie i w ciasteczku. Link jednorazowy SMS-em do listy obecności – **odłożony do wdrożenia na serwer** (wymaga publicznego adresu). |
 | Grupy odbiorców | Nauczyciele (osobna tabela kontaktów, niezależna od kont), uczniowie (własny numer, opcjonalny), rodzice (opiekunowie z „dostaje SMS”). Wybór: całe grupy, klasy × (uczniowie/rodzice), pojedyncze osoby; jeden SMS na numer. Ten sam kod wyboru (`@alert/shared`) działa na serwerze, w trybie awaryjnym i w telefonie. |
 | Wiadomości do grup | Dowolna treść, nadawca z listy zatwierdzonych w bramce, PIN; ta sama kolejka co alarm, niższy priorytet. |
 | Pule | Ta sama treść + nadawca → jedno zapytanie z wieloma numerami (SMSAPI `to` po przecinku, SerwerSMS `phone[]`); SMS-fly – równoległe pojedyncze zapytania. |
