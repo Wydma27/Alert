@@ -9,14 +9,21 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 
+import { Icon, type IconName } from './icons';
+
 type Variant = 'primary' | 'danger' | 'secondary' | 'ghost';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-ink text-white hover:bg-neutral-800 border-2 border-ink',
-  danger: 'bg-alarm text-white hover:bg-alarm-dark border-2 border-alarm-dark',
-  secondary: 'bg-surface text-ink hover:bg-neutral-100 border-2 border-ink',
-  ghost: 'bg-transparent text-ink hover:bg-neutral-200 border-2 border-transparent underline-offset-2 hover:underline',
+  primary: 'border-ink bg-ink text-white shadow-card hover:bg-ink-soft',
+  danger: 'border-alarm-dark bg-alarm text-white shadow-card hover:bg-alarm-dark',
+  secondary: 'border-field bg-surface text-ink shadow-card hover:border-ink hover:bg-slate-50',
+  ghost: 'border-transparent bg-transparent text-ink hover:bg-slate-200/70',
 };
+
+/** Klasy przycisku – także dla linków (<Link>, <a>, <label>), które mają wyglądać jak przycisk. */
+export function buttonClass(variant: Variant = 'primary', className = '') {
+  return `inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 px-4 py-2 font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${className}`;
+}
 
 export function Button({
   variant = 'primary',
@@ -30,7 +37,7 @@ export function Button({
     <button
       {...rest}
       disabled={disabled || busy}
-      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-4 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${className}`}
+      className={buttonClass(variant, className)}
     >
       {busy && <Spinner small />}
       {children}
@@ -67,13 +74,18 @@ export function Field({
       </label>
       {children(id)}
       {hint && !error && <p className="text-sm text-muted">{hint}</p>}
-      {error && <p className="text-sm font-semibold text-alarm">{error}</p>}
+      {error && (
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-alarm">
+          <Icon name="error" className="size-4" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
 const inputClass =
-  'min-h-12 w-full rounded-lg border-2 border-line bg-surface px-3 py-2 text-ink placeholder:text-neutral-500 focus:border-ink';
+  'min-h-12 w-full rounded-xl border border-field bg-surface px-3.5 py-2 text-ink shadow-card placeholder:text-slate-500 focus:border-focus focus:outline-hidden focus:ring-2 focus:ring-focus disabled:bg-slate-100 disabled:text-muted';
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${inputClass} ${props.className ?? ''}`} />;
@@ -84,52 +96,74 @@ export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={`${inputClass} ${props.className ?? ''}`} />;
+  return <select {...props} className={`select-chevron ${inputClass} ${props.className ?? ''}`} />;
 }
 
 export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
   return (
     <label className="flex min-h-12 cursor-pointer items-center gap-3">
-      <input type="checkbox" {...props} className="size-6 accent-ink" />
+      <input type="checkbox" {...props} className="size-6 shrink-0 accent-ink" />
       <span>{label}</span>
     </label>
   );
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-xl border-2 border-line bg-surface p-4 sm:p-5 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-6 ${className}`}>{children}</section>;
 }
 
 type Tone = 'error' | 'success' | 'warning' | 'info';
 const TONES: Record<Tone, string> = {
-  error: 'border-alarm bg-red-50 text-alarm-dark',
-  success: 'border-ok bg-green-50 text-ok',
-  warning: 'border-warn bg-warn-bg text-warn',
-  info: 'border-line bg-neutral-100 text-ink',
+  error: 'border-alarm/50 bg-red-50 text-alarm-dark',
+  success: 'border-ok/40 bg-green-50 text-ok',
+  warning: 'border-warn/40 bg-warn-bg text-warn',
+  info: 'border-line bg-slate-100 text-ink',
 };
+const TONE_ICONS: Record<Tone, IconName> = { error: 'error', success: 'check', warning: 'warning', info: 'info' };
 
 export function Notice({ tone = 'info', children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <div role={tone === 'error' ? 'alert' : 'status'} className={`rounded-lg border-2 px-4 py-3 font-medium ${TONES[tone]}`}>
-      {children}
+    <div role={tone === 'error' ? 'alert' : 'status'} className={`flex gap-3 rounded-xl border px-4 py-3 font-medium ${TONES[tone]}`}>
+      <Icon name={TONE_ICONS[tone]} className="mt-0.5 size-5" />
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
 export function PageHeader({ title, actions, children }: { title: string; actions?: ReactNode; children?: ReactNode }) {
   return (
-    <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-bold sm:text-3xl">{title}</h1>
+    <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
         {children && <div className="mt-1 text-muted">{children}</div>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
     </header>
   );
 }
 
 export function Badge({ tone = 'info', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`inline-block rounded-md border px-2 py-0.5 text-sm font-semibold ${TONES[tone]}`}>{children}</span>;
+  return <span className={`inline-block rounded-full border px-2.5 py-0.5 text-sm font-semibold ${TONES[tone]}`}>{children}</span>;
+}
+
+/** Zakładki (przełącznik widoku). */
+export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: [T, ReactNode][]; value: T; onChange: (value: T) => void }) {
+  return (
+    <div role="tablist" className="mb-4 flex w-full flex-wrap gap-1 rounded-2xl border border-line bg-slate-200/60 p-1 sm:w-fit">
+      {tabs.map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={value === key}
+          onClick={() => onChange(key)}
+          className={`min-h-11 flex-1 rounded-xl px-4 font-semibold transition-colors sm:flex-none ${value === key ? 'bg-ink text-white shadow-card' : 'text-muted hover:bg-surface hover:text-ink'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function Loading() {
@@ -163,11 +197,11 @@ export function Modal({
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border-2 border-ink p-0 backdrop:bg-black/60"
+      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-line p-0 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-[2px]"
     >
       {open && (
-        <div className="p-5">
-          <h2 className="mb-4 text-xl font-bold">{title}</h2>
+        <div className="p-5 sm:p-6">
+          <h2 className="mb-4 text-xl font-bold tracking-tight">{title}</h2>
           {children}
         </div>
       )}

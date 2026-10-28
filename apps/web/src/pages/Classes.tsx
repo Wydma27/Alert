@@ -79,7 +79,7 @@ export function ClassesPage() {
       {classes.data?.length === 0 && <Notice tone="info">Brak klas. Dodaj je ręcznie albo zaimportuj plik z dziennika.</Notice>}
 
       {classes.data && classes.data.length > 0 && (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border-2 border-line bg-surface">
+        <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           {classes.data.map((c) => (
             <li key={c.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:gap-4">
               <div className="flex items-baseline gap-4 md:w-56 md:shrink-0">

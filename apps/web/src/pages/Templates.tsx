@@ -130,7 +130,7 @@ function TemplateEditor({
             readOnly={!canEdit}
             onChange={(e) => setBody(e.target.value)}
             rows={6}
-            className="w-full rounded-lg border-2 border-line bg-surface p-3 font-mono text-sm focus:border-ink"
+            className="w-full rounded-xl border border-field bg-surface p-3 font-mono text-sm shadow-card focus:border-focus focus:outline-hidden focus:ring-2 focus:ring-focus"
           />
           {canEdit && (
             <div className="flex flex-wrap gap-1">
@@ -140,7 +140,7 @@ function TemplateEditor({
                   type="button"
                   onClick={() => insert(p)}
                   title={PLACEHOLDER_LABELS[p]}
-                  className="rounded-md border-2 border-ink px-2 py-1 font-mono text-sm hover:bg-neutral-200"
+                  className="rounded-md border-2 border-ink px-2 py-1 font-mono text-sm hover:bg-slate-200"
                 >
                   {`{${p}}`}
                 </button>
@@ -231,7 +231,7 @@ function EventTypes({ canEdit }: { canEdit: boolean }) {
       <p className="mb-3 text-muted">Przyciski w kreatorze alertu. „W SMS” to słowo wstawiane w miejsce {'{zdarzenie}'}.</p>
       <ul className="mb-3 flex flex-col gap-2">
         {types.data?.map((t) => (
-          <li key={t.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border-2 border-line p-3 ${t.active ? '' : 'opacity-60'}`}>
+          <li key={t.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3 ${t.active ? '' : 'opacity-60'}`}>
             <span>
               <strong>{t.label}</strong> <span className="text-muted">· w SMS: „{t.smsLabel}”</span>
             </span>

@@ -94,14 +94,14 @@ export function NewAlertPage() {
 
   return (
     <div className="mx-auto max-w-3xl pb-28">
-      <div className={`mb-4 rounded-xl border-4 p-4 ${drill ? 'border-warn bg-warn-bg' : 'border-alarm bg-red-50'}`}>
+      <div className={`mb-4 rounded-2xl border-2 p-4 ${drill ? 'border-warn bg-warn-bg' : 'border-alarm bg-red-50'}`}>
         <div className="text-sm font-bold uppercase tracking-wide text-muted">
           Krok {step + 1} z {STEPS.length}
         </div>
         <h1 className="text-2xl font-black">{STEPS[step]}</h1>
         <div className="mt-2 flex gap-1" aria-hidden>
           {STEPS.map((_, i) => (
-            <div key={i} className={`h-2 flex-1 rounded ${i <= step ? (drill ? 'bg-warn' : 'bg-alarm') : 'bg-neutral-300'}`} />
+            <div key={i} className={`h-2 flex-1 rounded ${i <= step ? (drill ? 'bg-warn' : 'bg-alarm') : 'bg-slate-300'}`} />
           ))}
         </div>
       </div>
@@ -236,7 +236,7 @@ export function NewAlertPage() {
               )}
             </Field>
           </Card>
-          <ul className="divide-y divide-line overflow-hidden rounded-xl border-2 border-line bg-surface">
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
             {classesInScope.map((c) => (
               <li key={c.id} className="flex items-center gap-3 p-3">
                 <span className="w-12 text-lg font-black">{c.name}</span>
@@ -308,7 +308,7 @@ export function NewAlertPage() {
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-line bg-surface p-3">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 p-3 shadow-[0_-6px_16px_-6px_rgb(15_23_42/0.15)] backdrop-blur">
         <div className="mx-auto flex max-w-3xl gap-3">
           <Button variant="secondary" className="flex-1" onClick={() => (step === 0 ? navigate('/') : setStep(step - 1))}>
             {step === 0 ? 'Anuluj' : 'Wstecz'}
@@ -371,7 +371,7 @@ function ChoiceButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`min-h-16 rounded-xl border-4 px-4 py-3 text-lg font-bold ${active ? activeClass : 'border-line bg-surface hover:border-ink'}`}
+      className={`min-h-16 rounded-2xl border-2 px-4 py-3 text-lg font-bold ${active ? activeClass : 'border-line bg-surface shadow-card hover:border-ink'}`}
     >
       {children}
     </button>
@@ -428,7 +428,7 @@ function StudentPicker({ selected, onChange }: { selected: StudentListItemDto[];
             <li key={s.id}>
               <button
                 type="button"
-                className="flex min-h-12 w-full items-center justify-between rounded-lg border-2 border-line px-3 text-left hover:border-ink"
+                className="flex min-h-12 w-full items-center justify-between rounded-xl border border-line px-3 text-left hover:border-ink"
                 onClick={() => onChange([...selected, s])}
               >
                 <span>

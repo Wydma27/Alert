@@ -148,7 +148,7 @@ export function AuditLogPage() {
       {log.data && entries.length === 0 && <Notice>Brak wpisów.</Notice>}
 
       {entries.length > 0 && (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border-2 border-line bg-surface">
+        <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           {entries.map((e) => (
             <li key={e.id} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">

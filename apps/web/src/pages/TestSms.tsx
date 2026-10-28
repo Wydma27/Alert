@@ -127,7 +127,7 @@ export function TestSmsPage() {
 
           <ul className="mb-3 flex flex-col gap-2">
             {numbers.data?.map((n) => (
-              <li key={n.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border-2 border-line p-3">
+              <li key={n.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3">
                 <span>
                   <strong>{n.label}</strong> <span className="font-mono">{n.phoneMasked}</span>
                 </span>
@@ -202,7 +202,7 @@ function AddNumberForm() {
   }
 
   return (
-    <form onSubmit={submit} className="mt-4 grid gap-3 border-t-2 border-line pt-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <form onSubmit={submit} className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
       {add.error && (
         <div className="sm:col-span-3">
           <Notice tone="error">{errorMessage(add.error)}</Notice>

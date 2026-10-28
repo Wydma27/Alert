@@ -16,9 +16,9 @@ import { enqueue, fetchWithCache, flush, pending, usePendingCount } from '../lib
 const TILE: Record<AttendanceValue, string> = {
   UNKNOWN: 'border-line bg-surface',
   PRESENT: 'border-ok bg-green-100',
-  ABSENT_TODAY: 'border-neutral-400 bg-neutral-200 text-muted',
+  ABSENT_TODAY: 'border-slate-400 bg-slate-200 text-muted',
   MISSING: 'border-alarm bg-alarm text-white',
-  PICKED_UP: 'border-ink bg-neutral-800 text-white',
+  PICKED_UP: 'border-ink bg-slate-800 text-white',
 };
 
 /** Niewysłane zmiany z telefonu nakładamy na dane z serwera/pamięci – ekran nie cofa świeżych odhaczeń. */
@@ -72,7 +72,7 @@ export function AttendancePage() {
   return (
     <>
       <SyncBanner />
-      <div className={`mb-4 rounded-xl border-4 p-3 ${drill ? 'border-warn bg-warn-bg' : 'border-alarm bg-red-50'}`}>
+      <div className={`mb-4 rounded-2xl border-2 p-3 ${drill ? 'border-warn bg-warn-bg' : 'border-alarm bg-red-50'}`}>
         <div className="text-sm font-black uppercase">{drill ? 'Ćwiczenia' : 'Alarm'} · od {formatTime(data.alert.startedAt)}</div>
         <h1 className="text-2xl font-black">Lista obecności – wybierz klasę</h1>
       </div>
@@ -81,7 +81,7 @@ export function AttendancePage() {
           const done = c.attendance.PRESENT + c.attendance.PICKED_UP + c.attendance.ABSENT_TODAY;
           return (
             <li key={c.id}>
-              <Link to={`/obecnosc/${c.id}`} className="block min-h-24 rounded-xl border-2 border-line bg-surface p-3 hover:border-ink">
+              <Link to={`/obecnosc/${c.id}`} className="block min-h-24 rounded-2xl border border-line bg-surface shadow-card p-3 hover:border-ink">
                 <div className="text-2xl font-black">{c.className}</div>
                 <div className="font-semibold">
                   {done} / {c.attendance.total}
@@ -166,7 +166,7 @@ export function AttendanceClassPage() {
       <Link to={hasRole('ADMIN', 'DYREKCJA') && overview.data?.alert ? `/alarm/${overview.data.alert.id}` : '/obecnosc'} className="mb-2 inline-block font-semibold underline">
         ← {hasRole('ADMIN', 'DYREKCJA') ? 'Centrum alertu' : 'Wszystkie klasy'}
       </Link>
-      <header className="sticky top-[76px] z-10 -mx-4 mb-3 border-b-2 border-line bg-page px-4 py-2">
+      <header className="sticky top-[71px] z-10 -mx-4 mb-3 border-b border-line bg-page px-4 py-2">
         <h1 className="text-2xl font-black">
           Klasa {cls?.className ?? ''} <span className="text-lg font-semibold text-muted">· {cls?.pointName}</span>
         </h1>
@@ -263,7 +263,7 @@ function StudentMenu({
           )}
           {student.pickupPersons.length === 0 && <Notice tone="warning">Brak zapisanych opiekunów – ustal tożsamość osoby i wpisz ją poniżej.</Notice>}
           <form
-            className="mt-2 flex flex-col gap-2 border-t-2 border-line pt-3"
+            className="mt-2 flex flex-col gap-2 border-t border-line pt-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (otherName.trim()) onMark('PICKED_UP', { name: otherName.trim() });

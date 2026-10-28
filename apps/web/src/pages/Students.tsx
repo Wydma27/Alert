@@ -72,10 +72,10 @@ export function StudentsPage() {
       {students.data?.length === 0 && <Notice>Brak uczniów spełniających kryteria.</Notice>}
 
       {students.data && students.data.length > 0 && (
-        <ul className="divide-y divide-line overflow-hidden rounded-xl border-2 border-line bg-surface">
+        <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           {students.data.map((s) => (
             <li key={s.id}>
-              <Link to={`/uczniowie/${s.id}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-2 hover:bg-neutral-100">
+              <Link to={`/uczniowie/${s.id}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-2 hover:bg-slate-100">
                 <span>
                   <span className="font-semibold">
                     {s.lastName} {s.firstName}

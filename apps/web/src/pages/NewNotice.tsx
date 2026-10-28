@@ -90,7 +90,7 @@ export function NewNoticePage() {
       )}
       {p && <PreviewCard p={p} />}
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-line bg-surface p-3">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 p-3 shadow-[0_-6px_16px_-6px_rgb(15_23_42/0.15)] backdrop-blur">
         <div className="mx-auto flex max-w-4xl gap-3">
           <Button variant="secondary" className="flex-1" onClick={() => navigate(-1)}>
             Anuluj
@@ -166,7 +166,7 @@ export function PreviewCard({ p }: { p: NoticePreviewDto }) {
         </div>
       </Card>
       {p.withoutPhone.length > 0 && (
-        <details className="rounded-xl border-2 border-line bg-surface p-3">
+        <details className="rounded-2xl border border-line bg-surface shadow-card p-3">
           <summary className="cursor-pointer font-semibold">Bez numeru ({p.withoutPhone.length}) – nie dostaną SMS-a</summary>
           <ul className="mt-2 max-h-64 overflow-y-auto">
             {p.withoutPhone.map((x) => (

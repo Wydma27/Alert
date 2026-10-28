@@ -11,7 +11,7 @@ import {
   type DeliveryStatusValue,
 } from '@alert/shared';
 import { PinModal } from '../components/PinModal';
-import { Badge, Button, Card, Checkbox, Field, Loading, Notice, Select } from '../components/ui';
+import { Badge, Button, buttonClass, Card, Checkbox, Field, Loading, Notice, Select, Tabs } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import { formatTime, useAlertEvents } from '../lib/hooks';
@@ -54,13 +54,13 @@ export function CommandCenterPage() {
 
   return (
     <>
-      <header className={`mb-4 rounded-xl border-4 p-4 ${drill ? 'border-warn bg-warn-bg' : active ? 'border-alarm bg-red-50' : 'border-line bg-surface'}`}>
+      <header className={`mb-4 rounded-2xl border-2 p-4 ${drill ? 'border-warn bg-warn-bg' : active ? 'border-alarm bg-red-50' : 'border-line bg-surface'}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <div className="text-sm font-black uppercase tracking-wider">
               {drill ? 'Ćwiczenia' : 'Alarm'} · {active ? 'trwa' : 'zakończony'}
               {active && (
-                <span className={`ml-2 inline-block size-2 rounded-full ${live ? 'bg-ok' : 'bg-neutral-400'}`} title={live ? 'na żywo' : 'odświeżanie co kilka sekund'} />
+                <span className={`ml-2 inline-block size-2 rounded-full ${live ? 'bg-ok' : 'bg-slate-400'}`} title={live ? 'na żywo' : 'odświeżanie co kilka sekund'} />
               )}
             </div>
             <h1 className="text-2xl font-black sm:text-3xl">{alert.eventLabel}</h1>
@@ -75,10 +75,10 @@ export function CommandCenterPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to="/obecnosc" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-surface px-4 font-semibold">
+            <Link to="/obecnosc" className={buttonClass('secondary')}>
               Lista obecności
             </Link>
-            <a href={`/api/alerts/${id}/report.csv`} className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-surface px-4 font-semibold">
+            <a href={`/api/alerts/${id}/report.csv`} className={buttonClass('secondary')}>
               Raport CSV
             </a>
           </div>
@@ -90,7 +90,7 @@ export function CommandCenterPage() {
       </header>
 
       {missing.length > 0 && (
-        <div className="mb-4 rounded-xl border-4 border-alarm bg-alarm p-4 text-white">
+        <div className="mb-4 rounded-2xl border-2 border-alarm-dark bg-alarm p-4 text-white shadow-lift">
           <h2 className="text-xl font-black">
             NIEODNALEZIENI{active ? '' : ' (w chwili zakończenia)'}: {missing.length}
           </h2>
@@ -127,26 +127,16 @@ export function CommandCenterPage() {
         </div>
       )}
 
-      <div role="tablist" className="mb-3 flex flex-wrap gap-1 border-b-2 border-line">
-        {(
-          [
-            ['problems', `Nie dotarło (${problemsCount})`],
-            ['classes', 'Klasy'],
-            ['messages', `Komunikaty (${messages.length})`],
-            ['all', 'Wszystkie SMS'],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`min-h-12 rounded-t-lg px-4 font-semibold ${tab === key ? 'bg-ink text-white' : 'hover:bg-neutral-200'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ['problems', `Nie dotarło (${problemsCount})`],
+          ['classes', 'Klasy'],
+          ['messages', `Komunikaty (${messages.length})`],
+          ['all', 'Wszystkie SMS'],
+        ]}
+      />
 
       {tab === 'problems' && <DeliveriesTab alertId={id} filter="problems" active={active} />}
       {tab === 'all' && <DeliveriesTab alertId={id} filter="all" active={active} />}
@@ -156,7 +146,7 @@ export function CommandCenterPage() {
             const done = c.attendance.PRESENT + c.attendance.PICKED_UP + c.attendance.ABSENT_TODAY;
             return (
               <li key={c.id}>
-                <Link to={`/obecnosc/${c.id}`} className="block rounded-xl border-2 border-line bg-surface p-4 hover:border-ink">
+                <Link to={`/obecnosc/${c.id}`} className="block rounded-2xl border border-line bg-surface shadow-card p-4 hover:border-ink">
                   <div className="flex items-baseline justify-between">
                     <span className="text-xl font-black">{c.className}</span>
                     <span className="font-semibold">
@@ -164,7 +154,7 @@ export function CommandCenterPage() {
                     </span>
                   </div>
                   <div className="text-muted">{c.pointName}</div>
-                  <div className="mt-2 h-3 overflow-hidden rounded bg-neutral-200">
+                  <div className="mt-2 h-3 overflow-hidden rounded bg-slate-200">
                     <div className="h-full bg-ok" style={{ width: `${c.attendance.total ? (done / c.attendance.total) * 100 : 0}%` }} />
                   </div>
                   {c.attendance.MISSING > 0 && (
@@ -310,7 +300,7 @@ function DeliveryRow({ alertId, delivery: d, detailed, onChanged }: { alertId: n
   const lastCall = d.calls[d.calls.length - 1];
 
   return (
-    <li className="rounded-lg border-2 border-line bg-surface p-3">
+    <li className="rounded-xl border border-line bg-surface p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="font-bold">

@@ -56,7 +56,7 @@ export function UsersPage() {
 
       <ul className="flex flex-col gap-3">
         {users.data?.map((u) => (
-          <li key={u.id} className={`rounded-xl border-2 border-line bg-surface p-4 ${u.isActive ? '' : 'opacity-60'}`}>
+          <li key={u.id} className={`rounded-2xl border border-line bg-surface shadow-card p-4 ${u.isActive ? '' : 'opacity-60'}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-lg font-bold">

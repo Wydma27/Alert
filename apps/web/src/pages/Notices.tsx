@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { GROUP_LABELS, type NoticeListItemDto, type ProblemNumberDto } from '@alert/shared';
-import { Badge, Card, Loading, Notice, PageHeader } from '../components/ui';
+import { Badge, buttonClass, Card, Loading, Notice, PageHeader, Tabs } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 
@@ -16,31 +16,21 @@ export function NoticesPage() {
       <PageHeader
         title="Wiadomości SMS"
         actions={
-          <Link to="/wiadomosci/nowa" className="inline-flex min-h-12 items-center rounded-lg border-2 border-alarm-dark bg-alarm px-4 font-semibold text-white">
+          <Link to="/wiadomosci/nowa" className={buttonClass('danger')}>
             Nowa wiadomość
           </Link>
         }
       >
         Wysłane wiadomości z raportem doręczeń i lista numerów, na które SMS nie dotarł.
       </PageHeader>
-      <div role="tablist" className="mb-4 flex flex-wrap gap-1 border-b-2 border-line">
-        {(
-          [
-            ['sent', 'Wysłane'],
-            ['problems', 'Numery do poprawy'],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`-mb-0.5 min-h-12 rounded-t-lg border-2 px-4 font-semibold ${tab === key ? 'border-line border-b-surface bg-surface' : 'border-transparent text-muted'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ['sent', 'Wysłane'],
+          ['problems', 'Numery do poprawy'],
+        ]}
+      />
       {tab === 'sent' ? <SentList /> : <ProblemNumbers />}
     </>
   );
@@ -58,7 +48,7 @@ function SentList() {
         const pending = n.counts.QUEUED + n.counts.SENDING;
         return (
           <li key={n.id}>
-            <Link to={`/wiadomosci/${n.id}`} className="block rounded-xl border-2 border-line bg-surface p-3 hover:border-ink">
+            <Link to={`/wiadomosci/${n.id}`} className="block rounded-2xl border border-line bg-surface shadow-card p-3 hover:border-ink">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="font-bold">{n.summary}</div>
@@ -95,7 +85,7 @@ function ProblemNumbers() {
         danych. Pozostałe to zwykle wyłączony telefon lub brak zasięgu.
       </p>
       <div>
-        <a href="/api/reports/problem-numbers.csv" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-surface px-4 font-semibold">
+        <a href="/api/reports/problem-numbers.csv" className={buttonClass('secondary')}>
           Pobierz raport CSV
         </a>
       </div>
@@ -104,7 +94,7 @@ function ProblemNumbers() {
       ) : (
         <Card className="overflow-x-auto p-0 sm:p-0">
           <table className="w-full text-left">
-            <thead className="bg-neutral-100">
+            <thead className="bg-slate-100">
               <tr>
                 <th className="p-2">Osoba</th>
                 <th className="p-2">Numer</th>

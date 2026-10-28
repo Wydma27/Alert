@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { searchKey, type TeacherDto } from '@alert/shared';
 import { PhoneReveal } from '../components/PhoneReveal';
-import { Button, Card, ConfirmModal, Field, Loading, Modal, Notice, PageHeader, TextInput } from '../components/ui';
+import { Button, buttonClass, Card, ConfirmModal, Field, Loading, Modal, Notice, PageHeader, TextInput } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { plural } from '../lib/format';
@@ -70,7 +70,7 @@ export function TeachersPage() {
         actions={
           canEdit && (
             <>
-              <Link to="/import?typ=nauczyciele" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-surface px-4 font-semibold">
+              <Link to="/import?typ=nauczyciele" className={buttonClass('secondary')}>
                 Import z pliku
               </Link>
               <Button

@@ -72,13 +72,13 @@ export function RecipientPicker({
                 type="button"
                 aria-pressed={active}
                 onClick={() => onChange({ ...value, groups: toggle(value.groups, g, !active) })}
-                className={`min-h-16 rounded-xl border-4 px-4 py-3 text-left font-bold ${active ? 'border-ink bg-ink text-white' : 'border-line bg-surface hover:border-ink'}`}
+                className={`min-h-16 rounded-2xl border-2 px-4 py-3 text-left font-bold ${active ? 'border-ink bg-ink text-white' : 'border-line bg-surface shadow-card hover:border-ink'}`}
               >
                 <span className="block text-lg">
                   {active ? '✓ ' : ''}
                   {GROUP_LABELS[g]}
                 </span>
-                <span className={`block text-sm font-semibold ${active ? 'text-neutral-300' : 'text-muted'}`}>
+                <span className={`block text-sm font-semibold ${active ? 'text-slate-300' : 'text-muted'}`}>
                   {stats[g].withPhone} z numerem
                   {stats[g].all !== stats[g].withPhone && ` (z ${stats[g].all})`}
                 </span>
@@ -166,7 +166,7 @@ export function RecipientPicker({
               <button
                 type="button"
                 disabled={selectedKeys.has(p.key)}
-                className="flex min-h-12 w-full flex-wrap items-center justify-between gap-2 rounded-lg border-2 border-line px-3 py-1 text-left hover:border-ink disabled:opacity-50"
+                className="flex min-h-12 w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-1 text-left hover:border-ink disabled:opacity-50"
                 onClick={() => onChange({ ...value, personKeys: [...value.personKeys, p.key] })}
               >
                 <span>

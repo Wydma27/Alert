@@ -15,7 +15,7 @@ import {
   type ImportValidationResponse,
   type TeacherImportField,
 } from '@alert/shared';
-import { Badge, Button, Card, Checkbox, Field, Notice, PageHeader, Select } from '../components/ui';
+import { Badge, Button, buttonClass, Card, Checkbox, Field, Notice, PageHeader, Select } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { plural } from '../lib/format';
 
@@ -108,11 +108,11 @@ export function ImportPage() {
           </ul>
           <div className="flex flex-wrap gap-2">
             {teachers ? (
-              <Link to="/nauczyciele" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
+              <Link to="/nauczyciele" className={buttonClass('primary')}>
                 Lista nauczycieli
               </Link>
             ) : (
-              <Link to="/klasy" className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
+              <Link to="/klasy" className={buttonClass('primary')}>
                 Przypisz punkty zbiórki klasom
               </Link>
             )}
@@ -151,7 +151,7 @@ export function ImportPage() {
                 type="button"
                 aria-pressed={type === t}
                 onClick={() => setType(t)}
-                className={`min-h-14 rounded-xl border-4 px-4 py-2 text-lg font-bold ${type === t ? 'border-ink bg-ink text-white' : 'border-line bg-surface hover:border-ink'}`}
+                className={`min-h-14 rounded-2xl border-2 px-4 py-2 text-lg font-bold ${type === t ? 'border-ink bg-ink text-white' : 'border-line bg-surface shadow-card hover:border-ink'}`}
               >
                 {label}
               </button>
@@ -179,7 +179,7 @@ export function ImportPage() {
             <li>Błędne numery (stacjonarne, za krótkie) zobaczysz w raporcie przed zapisem.</li>
             <li>Plik nie jest zapisywany na serwerze. Stary format .xls zapisz w Excelu jako .xlsx albo CSV.</li>
           </ul>
-          <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border-2 border-ink bg-ink px-4 font-semibold text-white">
+          <label className={buttonClass('primary', 'cursor-pointer')}>
             {busy ? 'Wczytywanie…' : 'Wybierz plik CSV lub XLSX'}
             <input type="file" accept=".csv,.xlsx,.txt" className="sr-only" onChange={onFile} disabled={busy} />
           </label>
@@ -246,9 +246,9 @@ export function ImportPage() {
             )}
 
             <h3 className="mt-5 mb-2 font-bold">Podgląd pierwszych wierszy</h3>
-            <div className="overflow-x-auto rounded-lg border-2 border-line">
+            <div className="overflow-x-auto rounded-xl border border-line">
               <table className="w-full text-left text-sm">
-                <thead className="bg-neutral-100">
+                <thead className="bg-slate-100">
                   <tr>
                     {upload.headers.map((h, i) => (
                       <th key={i} className="whitespace-nowrap p-2">
@@ -407,7 +407,7 @@ function ValidationResult({
           <button type="button" className="mt-2 font-semibold underline" onClick={downloadIssues}>
             Pobierz listę uwag (CSV)
           </button>
-          <ul className="mt-2 max-h-80 overflow-y-auto rounded-lg border-2 border-line">
+          <ul className="mt-2 max-h-80 overflow-y-auto rounded-xl border border-line">
             {v.issues.map((i, n) => (
               <li key={n} className={`border-b border-line px-3 py-2 last:border-0 ${i.level === 'error' ? 'bg-red-50' : ''}`}>
                 <strong>Wiersz {i.row}:</strong> {i.message}

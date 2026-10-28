@@ -120,7 +120,7 @@ export function StudentDetailPage() {
 
         <ul className="flex flex-col gap-3">
           {s.guardians.map((g) => (
-            <li key={g.guardianId} className="rounded-lg border-2 border-line p-3">
+            <li key={g.guardianId} className="rounded-xl border border-line p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <div className="font-bold">

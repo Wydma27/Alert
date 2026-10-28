@@ -10,7 +10,7 @@ import {
   type NoticeDetailDto,
 } from '@alert/shared';
 import { SmsBubble } from '../components/SmsCounter';
-import { Badge, Button, Card, Loading, Notice } from '../components/ui';
+import { Badge, Button, buttonClass, Card, Loading, Notice, Tabs } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 
@@ -62,7 +62,7 @@ export function NoticeDetailPage() {
       <Link to="/wiadomosci" className="mb-2 inline-block font-semibold underline">
         ← Wiadomości
       </Link>
-      <header className="mb-4 rounded-xl border-2 border-line bg-surface p-4">
+      <header className="mb-4 rounded-2xl border border-line bg-surface shadow-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <div className="text-sm font-black uppercase tracking-wider text-muted">
@@ -73,7 +73,7 @@ export function NoticeDetailPage() {
               {formatDateTime(n.createdAt)} · {n.createdBy ?? '—'} · nadawca: {n.sender ?? 'domyślny'}
             </p>
           </div>
-          <a href={`/api/notices/${id}/report.csv`} className="inline-flex min-h-12 items-center rounded-lg border-2 border-ink bg-surface px-4 font-semibold">
+          <a href={`/api/notices/${id}/report.csv`} className={buttonClass('secondary')}>
             Raport CSV
           </a>
         </div>
@@ -117,32 +117,22 @@ export function NoticeDetailPage() {
         </div>
       )}
 
-      <div role="tablist" className="mb-3 flex flex-wrap gap-1 border-b-2 border-line">
-        {(
-          [
-            ['problems', `Nie dotarło (${failed})`],
-            ['pending', `W drodze (${c.QUEUED + c.SENDING + c.SENT})`],
-            ['all', `Wszystkie (${c.total})`],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className={`-mb-0.5 min-h-12 rounded-t-lg border-2 px-4 font-semibold ${tab === key ? 'border-line border-b-surface bg-surface' : 'border-transparent text-muted'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ['problems', `Nie dotarło (${failed})`],
+          ['pending', `W drodze (${c.QUEUED + c.SENDING + c.SENT})`],
+          ['all', `Wszystkie (${c.total})`],
+        ]}
+      />
 
       {deliveries.isLoading && <Loading />}
       {deliveries.data && deliveries.data.length === 0 && <Notice tone="success">Brak pozycji.</Notice>}
       {deliveries.data && deliveries.data.length > 0 && (
         <Card className="overflow-x-auto p-0 sm:p-0">
           <table className="w-full text-left">
-            <thead className="bg-neutral-100">
+            <thead className="bg-slate-100">
               <tr>
                 <th className="p-2">Odbiorca</th>
                 <th className="p-2">Numer</th>

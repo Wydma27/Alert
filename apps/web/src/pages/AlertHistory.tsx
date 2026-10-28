@@ -16,7 +16,7 @@ export function AlertHistoryPage() {
       <ul className="flex flex-col gap-2">
         {list.data?.map((a) => (
           <li key={a.id}>
-            <Link to={`/alarm/${a.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-line bg-surface p-4 hover:border-ink">
+            <Link to={`/alarm/${a.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line bg-surface shadow-card p-4 hover:border-ink">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <strong className="text-lg">{a.eventLabel}</strong>

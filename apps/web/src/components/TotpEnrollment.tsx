@@ -64,7 +64,7 @@ export function TotpEnrollment({
             Każdy kod działa jeden raz – użyjesz go, gdy nie będziesz mieć telefonu. Zapisz je teraz (wydruk, sejf, menedżer
             haseł). <strong>Nie zobaczysz ich ponownie.</strong>
           </p>
-          <ol className="grid grid-cols-2 gap-2 rounded-lg border-2 border-ink bg-neutral-50 p-4 font-mono text-lg">
+          <ol className="grid grid-cols-2 gap-2 rounded-lg border-2 border-ink bg-slate-50 p-4 font-mono text-lg">
             {result.codes.map((c) => (
               <li key={c}>{c}</li>
             ))}

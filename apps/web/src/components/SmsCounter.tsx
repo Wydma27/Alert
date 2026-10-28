@@ -30,7 +30,7 @@ export function SmsCounter({ info }: { info: SmsInfo }) {
 /** Dymek wiadomości jak w telefonie. */
 export function SmsBubble({ sender, text }: { sender?: string; text: string }) {
   return (
-    <div className="max-w-md rounded-2xl rounded-bl-sm border-2 border-line bg-neutral-100 p-4 text-[15px] leading-snug break-words">
+    <div className="max-w-md rounded-2xl rounded-bl-sm border border-line bg-slate-100 p-4 text-[15px] leading-snug break-words">
       {sender && <div className="mb-1 text-sm font-bold text-muted">{sender}</div>}
       {text}
     </div>

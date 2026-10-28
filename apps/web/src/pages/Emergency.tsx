@@ -43,13 +43,16 @@ export function EmergencyPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="border-b-4 border-alarm bg-ink px-4 py-3 text-white">
+      <header className="border-b-[3px] border-alarm bg-ink px-4 py-3 text-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
-          <div>
-            <div className="text-lg font-black">TRYB AWARYJNY</div>
-            <div className="text-sm text-neutral-300">Wysyłka SMS, gdy baza danych albo serwer nie działają</div>
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/icon.svg" alt="" className="size-9 shrink-0 rounded-[0.6rem]" />
+            <div className="min-w-0">
+              <div className="text-lg font-black">TRYB AWARYJNY</div>
+              <div className="text-sm text-slate-300">Wysyłka SMS, gdy baza danych albo serwer nie działają</div>
+            </div>
           </div>
-          <Link to="/" className="rounded-lg border-2 border-white px-3 py-2 font-semibold">
+          <Link to="/" className="shrink-0 rounded-xl border-2 border-white/70 px-3 py-2 font-semibold hover:bg-white/10">
             Aplikacja
           </Link>
         </div>
