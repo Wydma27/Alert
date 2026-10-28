@@ -2,11 +2,11 @@
 // - strona: najpierw sieć, przy jej braku ostatnia zapisana wersja,
 // - pliki JS/CSS (z hashami w nazwach): z pamięci, a gdy ich nie ma – z sieci,
 // - /api/* nigdy nie jest buforowane (dane są zawsze świeże albo z kolejki w telefonie).
-const CACHE = 'alert-szkolny-v1';
+const CACHE = 'alert-szkolny-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg'])));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/apple-touch-icon.png'])));
 });
 
 self.addEventListener('activate', (event) => {
