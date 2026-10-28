@@ -1,0 +1,15 @@
+# Kopia zapasowa codziennie o 2:30 (także po starcie serwera, jeśli o tej porze był wyłączony).
+# Instalacja: sudo cp deploy/alert-backup.service deploy/alert-backup.timer /etc/systemd/system/
+#             sudo systemctl daemon-reload && sudo systemctl enable --now alert-backup.timer
+# Sprawdzenie: systemctl list-timers alert-backup.timer ; journalctl -u alert-backup
+
+[Unit]
+Description=Alert Szkolny – codzienna kopia zapasowa bazy
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

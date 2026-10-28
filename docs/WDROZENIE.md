@@ -34,47 +34,146 @@ W tym trybie SMS-y **nie wychodzą** (`SMS_PROVIDER=fake`) – można bezpieczni
 
 ## 2. Gdzie uruchomić na stałe
 
-**Na serwerze poza budynkiem szkoły** (np. VPS w Polsce/UE). Komputer w szkole w czasie ewakuacji może zostać
-bez prądu albo w zamkniętym budynku – wtedy alarmu nie da się wysłać ani śledzić. Komputer w szkole nadaje się
+**Na serwerze poza budynkiem szkoły** (VPS w Polsce/UE). Komputer w szkole w czasie ewakuacji może zostać
+bez prądu albo w zamkniętym budynku – wtedy alarmu nie da się wysłać ani śledzić. Nauczyciele w punkcie zbiórki
+korzystają z internetu komórkowego, więc serwer musi być dostępny z internetu. Komputer w szkole nadaje się
 tylko do pilotażu.
 
-Przykładowa instalacja na serwerze z Linuksem (Ubuntu/Debian). **Ten przepis nie był jeszcze sprawdzony
-na serwerze – przejdź go najpierw na serwerze testowym.**
+Pliki konfiguracyjne są w katalogu [`deploy/`](../deploy). Przepis zakłada **Ubuntu 24.04** i był sprawdzony
+lokalnie w wersji produkcyjnej (zbudowana aplikacja, `NODE_ENV=production`), ale **jeszcze nie na prawdziwym
+serwerze** – przejdź go najpierw na serwerze testowym albo przy pilotażu.
 
-1. Zainstaluj Node.js 22+, PostgreSQL 16 i serwer HTTPS (np. Caddy).
-2. Utwórz bazę i użytkownika w PostgreSQL.
-3. Skopiuj repozytorium, potem:
-   ```bash
-   npm ci
-   npm run setup
-   ```
-4. W `.env` ustaw:
-   ```env
-   NODE_ENV=production
-   DATABASE_URL=postgresql://UŻYTKOWNIK:HASŁO@127.0.0.1:5432/alert
-   APP_URL=https://alert.twojaszkola.pl
-   API_HOST=127.0.0.1
-   ```
-5. Utwórz tabele i zbuduj aplikację:
-   ```bash
-   npm run db:deploy
-   npm run build
-   npm start            # docelowo jako usługa systemd z automatycznym restartem
-   ```
-6. HTTPS przez Caddy (`/etc/caddy/Caddyfile`):
-   ```
-   alert.twojaszkola.pl {
-       reverse_proxy 127.0.0.1:3000
-   }
-   ```
-7. **Kopie zapasowe**: codziennie `pg_dump` bazy na inny serwer, zaszyfrowane (np. `pg_dump … | gpg -c`),
-   + jednorazowo bezpieczna kopia pliku `.env` (osobno od kopii bazy).
-8. **Szyfrowanie dysku** serwera (LUKS albo szyfrowany wolumin u dostawcy VPS) – numery telefonów są szyfrowane
-   przez aplikację, a szyfrowany dysk chroni też pozostałe dane (imiona, nazwiska, klasy) „w spoczynku”.
-9. Monitoring: zewnętrzne sprawdzanie adresu `https://…/api/health` (np. co 5 minut) z powiadomieniem.
-   Odpowiedź `"db":false` = baza nie działa, aplikacja jest w trybie awaryjnym.
-10. Katalog `.data/emergency` (kopia awaryjna kontaktów i dziennik wysyłek bez bazy, zaszyfrowane) musi być na
-    dysku serwera aplikacji – ustawienie `EMERGENCY_DATA_DIR`.
+### 2.1. Co przygotować
+
+- **VPS**: 2 GB RAM, 1–2 vCPU, 20 GB dysku wystarczy dla jednej szkoły. Centrum danych w Polsce lub UE,
+  z opcją szyfrowania dysku i z **umową powierzenia przetwarzania danych** (RODO, patrz [RODO.md](RODO.md)).
+- **Adres**, np. `alert.twojaszkola.pl` – osoba od domeny szkoły dodaje rekord **A** (i ewentualnie AAAA)
+  wskazujący na adres IP serwera.
+- Dostęp **SSH kluczem** (nie hasłem).
+
+### 2.2. Przygotowanie serwera
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo apt install -y unattended-upgrades ufw git rsync gnupg postgresql caddy
+sudo dpkg-reconfigure -plow unattended-upgrades     # automatyczne poprawki bezpieczeństwa
+
+# Zapora: tylko SSH i WWW
+sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable
+
+# Node.js 22 (LTS) – wersja z Ubuntu jest za stara
+curl -fsSL https://deb.nodesource.com/setup_22.x -o nodesource_setup.sh
+sudo -E bash nodesource_setup.sh && sudo apt install -y nodejs
+node --version                                       # v22.x lub nowszy
+```
+
+W `/etc/ssh/sshd_config` ustaw `PasswordAuthentication no` i `PermitRootLogin no`, potem `sudo systemctl restart ssh`
+(najpierw sprawdź, że logowanie kluczem działa!).
+
+### 2.3. Baza danych
+
+```bash
+DB_PASS=$(openssl rand -base64 24 | tr -d '/+=')
+sudo -u postgres psql -c "CREATE USER alert WITH PASSWORD '$DB_PASS';"
+sudo -u postgres psql -c "CREATE DATABASE alert OWNER alert;"
+echo "$DB_PASS"    # wpiszesz je do .env (DATABASE_URL)
+```
+
+PostgreSQL z Ubuntu słucha tylko na `localhost` – tak ma zostać.
+
+### 2.4. Aplikacja
+
+Kod trafia na serwer z repozytorium Git: najprościej z **prywatnego** repozytorium (GitHub/GitLab), albo bez
+serwisu zewnętrznego – na komputerze `git bundle create alert.bundle --all`, skopiuj plik `scp`-em i na serwerze
+`git clone alert.bundle alert-szkolny`.
+
+```bash
+sudo useradd --system --create-home --home-dir /var/lib/alert-szkolny --shell /usr/sbin/nologin alert
+sudo mkdir /opt/alert-szkolny && sudo chown alert:alert /opt/alert-szkolny
+sudo -u alert git clone <ADRES_REPOZYTORIUM> /opt/alert-szkolny
+cd /opt/alert-szkolny
+sudo -u alert npm ci
+sudo -u alert npm run setup          # tworzy .env z nowymi kluczami
+sudo chmod 600 .env
+sudo -u alert nano .env              # zmiany poniżej
+```
+
+W `/opt/alert-szkolny/.env` zmień:
+
+```env
+NODE_ENV=production
+DATABASE_URL=postgresql://alert:HASŁO_Z_KROKU_2.3@127.0.0.1:5432/alert
+API_HOST=127.0.0.1
+API_PORT=3000
+TRUST_PROXY=loopback
+APP_URL=https://alert.twojaszkola.pl
+SMS_PROVIDER=smsfly
+SMSFLY_API_KEY=…                      # klucz z panelu bramki
+SMS_CALLBACK_BASE_URL=https://alert.twojaszkola.pl   # raporty doręczeń (SMSAPI, SerwerSMS)
+```
+
+**Przenosisz dane z komputera (pilotaż)?** Numery są zaszyfrowane kluczami z `.env` – na serwerze muszą być
+**te same** `ENCRYPTION_KEYS`, `ENCRYPTION_ACTIVE_KEY_ID` i `BLIND_INDEX_KEY` co na komputerze, a bazę przenosisz
+`pg_dump`/`pg_restore`. Prościej: zacząć na serwerze od czystej bazy i zaimportować dane z dziennika jeszcze raz.
+
+```bash
+sudo -u alert npm run db:deploy      # tabele
+sudo -u alert npm run build          # frontend + serwer
+sudo -u alert mkdir -p .data/emergency
+```
+
+### 2.5. Usługa i HTTPS
+
+```bash
+sudo cp deploy/alert-szkolny.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now alert-szkolny
+curl -s http://127.0.0.1:3000/api/health          # {"ok":true,"db":true}
+
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile                     # wpisz swój adres zamiast alert.twojaszkola.pl
+sudo systemctl reload caddy
+```
+
+Otwórz `https://alert.twojaszkola.pl` – kłódka w przeglądarce oznacza, że certyfikat działa (Caddy pobiera
+i odnawia go sam). Logi aplikacji: `journalctl -u alert-szkolny -f`.
+
+### 2.6. Kopie zapasowe (codziennie, zaszyfrowane)
+
+```bash
+sudo mkdir -p /etc/alert-szkolny
+sudo sh -c 'openssl rand -base64 32 > /etc/alert-szkolny/backup.pass' && sudo chmod 600 /etc/alert-szkolny/backup.pass
+sudo chmod +x /opt/alert-szkolny/deploy/backup.sh
+sudo cp deploy/alert-backup.service deploy/alert-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now alert-backup.timer
+sudo systemctl start alert-backup && journalctl -u alert-backup -n 5    # pierwsza kopia od razu
+```
+
+- Kopie: `/var/backups/alert-szkolny`, 30 dni. **Kopia musi też trafiać poza ten serwer**: w
+  `/etc/alert-szkolny/backup.env` wpisz `REMOTE=użytkownik@inny-serwer:/katalog` (rsync przez SSH, klucz bez hasła
+  dla roota) albo pobieraj pliki regularnie na zaszyfrowany dysk szkoły.
+- **Hasło kopii** (`backup.pass`) i **plik `.env`** zapisz w bezpiecznym miejscu poza serwerem (np. menedżer haseł
+  dyrekcji) – bez nich kopia jest bezużyteczna. Trzymaj je osobno od samych kopii.
+- **Sprawdź odtworzenie** przynajmniej raz (polecenia na początku `deploy/backup.sh`) – na osobnej bazie.
+
+### 2.7. Monitoring
+
+Zewnętrzna usługa sprawdzająca co 5 minut `https://alert.twojaszkola.pl/api/health` z powiadomieniem e-mail/SMS
+do administratora (np. darmowy plan UptimeRobot lub Better Stack). Odpowiedź `"db":false` = baza nie działa,
+aplikacja jest w trybie awaryjnym. Raz w miesiącu: saldo bramki SMS („Test SMS”) i `npm run audit:verify`.
+
+### 2.8. Aktualizacja aplikacji
+
+```bash
+cd /opt/alert-szkolny
+sudo systemctl start alert-backup                  # najpierw kopia
+sudo -u alert git pull
+sudo -u alert npm ci
+sudo -u alert npm run db:deploy
+sudo -u alert npm run build
+sudo systemctl restart alert-szkolny
+```
+
+Nie aktualizuj w trakcie ćwiczeń ani tuż przed nimi.
 
 Na serwerze **nie uruchamiaj `npm run db:seed`** (czyści dane; przy `NODE_ENV=production` jest zablokowany)
 ani `npm run db:local` (to baza tylko do testów).
@@ -123,8 +222,8 @@ ani `npm run db:local` (to baza tylko do testów).
 - [ ] Dyrekcja ma 2FA i PIN; nauczyciele są zalogowani na swoich telefonach (aplikacja dodana do ekranu głównego).
 - [ ] Dyrekcja ma włączoną **kopię kontaktów w telefonie** i sprawdziła, że otwiera ją w „Tryb awaryjny”.
 - [ ] Nauczyciele zaimportowani; w „Wiadomości → Numery do poprawy” nie ma błędnych numerów.
-- [ ] Przeprowadzone **ćwiczenia** (tryb ĆWICZENIA – rodzice nic nie dostają) z udziałem nauczycieli.
-- [ ] RODO: zgoda/opinia Inspektora Ochrony Danych szkoły, umowa powierzenia przetwarzania z operatorem bramki
+- [ ] Przeprowadzone **ćwiczenia** (tryb ĆWICZENIA – rodzice nic nie dostają) z udziałem nauczycieli – plan: [PILOTAZ.md](PILOTAZ.md).
+- [ ] RODO ([RODO.md](RODO.md)): zgoda/opinia Inspektora Ochrony Danych szkoły, umowa powierzenia przetwarzania z operatorem bramki
       SMS, informacja dla rodziców o celu i zakresie przetwarzania numerów, ustalony okres retencji
       (`ALERT_RETENTION_DAYS`, domyślnie 365 dni).
 - [ ] Zgodność z obowiązującymi w szkole wytycznymi dotyczącymi powiadamiania o ewakuacji.
@@ -154,7 +253,7 @@ Wszystkie wysyłki awaryjne trafiają do dziennika zdarzeń (z telefonu – po o
 
 ## 7. Znane ograniczenia
 
-- Przepis instalacji serwerowej (punkt 2) nie był jeszcze sprawdzony na serwerze.
+- Przepis instalacji serwerowej (punkt 2, pliki w `deploy/`) był sprawdzony lokalnie w wersji produkcyjnej, ale jeszcze nie na serwerze z Linuksem.
 - Import: stary format **.xls** nie jest obsługiwany – zapisz plik jako .xlsx lub CSV.
 - Wysyłka pulami do SMSAPI i SerwerSMS nie była testowana na prawdziwym koncie (tylko testy automatyczne).
 - Kopia w urządzeniu wymaga HTTPS (na `http://adres-IP` w sieci szkolnej nie działa). Jest zabezpieczona hasłem

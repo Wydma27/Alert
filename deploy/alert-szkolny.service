@@ -1,0 +1,33 @@
+# Usługa systemd: aplikacja startuje z systemem i wstaje sama po awarii.
+# Instalacja: sudo cp deploy/alert-szkolny.service /etc/systemd/system/
+#             sudo systemctl daemon-reload && sudo systemctl enable --now alert-szkolny
+# Logi:       journalctl -u alert-szkolny -f
+
+[Unit]
+Description=Alert Szkolny (powiadomienia SMS o ewakuacji)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alert
+Group=alert
+WorkingDirectory=/opt/alert-szkolny/apps/api
+ExecStart=/usr/bin/node --env-file=/opt/alert-szkolny/.env dist/server.js
+Restart=always
+RestartSec=3
+
+# Ograniczenia: aplikacja zapisuje tylko kopię awaryjną (.data), reszta systemu tylko do odczytu.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/alert-szkolny/.data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,7 @@ wie, gdzie jest dziecko. Działa także przy awarii bazy danych lub serwera (try
 **Wdrażasz w szkole? Zacznij od [docs/WDROZENIE.md](docs/WDROZENIE.md).**
 Zgodność z wytycznymi (9 punktów): [docs/WYMAGANIA.md](docs/WYMAGANIA.md).
 Architektura, model danych i decyzje: [docs/ARCHITEKTURA.md](docs/ARCHITEKTURA.md).
+Pierwsze ćwiczenia z nauczycielami: [docs/PILOTAZ.md](docs/PILOTAZ.md). Materiał dla IOD: [docs/RODO.md](docs/RODO.md).
 
 ## Co potrafi
 
@@ -130,6 +131,7 @@ npm run build
 
 W `.env` ustaw `API_HOST=0.0.0.0`, potem `npm start` i otwórz na telefonie `http://<adres-IP-komputera>:3000`
 (adres: `ipconfig`). Windows może zapytać o zgodę zapory. Po teście przywróć `API_HOST=127.0.0.1`.
+Bez HTTPS telefon nie włączy pracy bez zasięgu ani kopii kontaktów w urządzeniu – to sprawdzisz dopiero na serwerze.
 
 ## Przydatne polecenia
 

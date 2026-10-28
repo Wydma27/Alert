@@ -1,0 +1,13 @@
+# Jednorazowe uruchomienie kopii zapasowej – wywoływane przez alert-backup.timer.
+# Ustawienia (drugi serwer, ile dni trzymać) w /etc/alert-szkolny/backup.env, np.:
+#   REMOTE=kopie@kopie.example.pl:/srv/kopie/alert
+#   KEEP_DAYS=30
+
+[Unit]
+Description=Alert Szkolny – kopia zapasowa bazy
+After=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/alert-szkolny/backup.env
+ExecStart=/opt/alert-szkolny/deploy/backup.sh

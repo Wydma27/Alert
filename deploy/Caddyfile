@@ -1,0 +1,11 @@
+# Caddy: HTTPS (certyfikat Let's Encrypt pobierany i odnawiany automatycznie) przed aplikacją.
+# Skopiuj do /etc/caddy/Caddyfile i zmień adres na swój. Domena musi już wskazywać na ten serwer (rekord A/AAAA).
+# W .env aplikacji: TRUST_PROXY=loopback, APP_URL=https://<ten adres>, API_HOST=127.0.0.1.
+
+alert.twojaszkola.pl {
+	encode zstd gzip
+
+	# Aplikacja ustawia własne nagłówki bezpieczeństwa (CSP, HSTS) – Caddy tylko przekazuje ruch.
+	# Bez dziennika dostępu: adresy raportów doręczeń zawierają tajny token (?token=…).
+	reverse_proxy 127.0.0.1:3000
+}
